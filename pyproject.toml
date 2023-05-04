@@ -31,13 +31,16 @@ requires-python = ">=3.9"
 dependencies = [
     "torch>=2.0.0",
     "pydantic>=1.8.2",
-    "sentence-transformers>=2.2.0"
+    "sentence-transformers>=2.2.0",
+    "bokeh>=1.10.0",
+    "jupyter_bokeh",
+    "umap-learn>=0.1.1",
 ]
 
 [project.optional-dependencies]
 dev = [
-  "ruff==0.0.261", 
-  "black[jupyter]==23.3.0",
+  "ruff>=0.0.261", 
+  "black[jupyter]>=23.3.0",
 ]
 tests = [
   "pytest>=7.1.2,<7.4.0",

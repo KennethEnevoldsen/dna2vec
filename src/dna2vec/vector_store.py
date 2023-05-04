@@ -1,132 +1,69 @@
-from typing import Callable, Dict, List, Literal
+from typing import Dict, List
 
-from pydantic import BaseConfig, BaseModel
 import numpy as np
 
 
-class VectorStore(BaseModel):
-
-    scores: Dict[str, np.ndarray]
+class VectorStore:
+    seq2vec: Dict[str, np.ndarray] = {}
     device: str
-    emedding_fn: Callable[[str], np.ndarray]
 
-    class Config(BaseConfig):
-        arbitrary_types_allowed = True
-
-
-    def create_local_vector_store(
+    def __init__(
         self,
-        phrase_mode: Literal["arguments", "relationships"] = "arguments",
+        sequences: List[str] = [],
+        device: str = "cuda:4",
     ) -> None:
-
-        if mode == "sentence_transformer":
-            self.run(mode=phrase_mode, template_assistance=False)
-        elif mode == "sentence_transformer_with_role_templates":
-            self.run(mode=phrase_mode, template_assistance=True)
+        self.device = device
+        self.add_sequences(sequences)
 
     def clear_scores(self) -> None:
-        self.scores = {}
+        self.seq2vec = {}
 
-    def get_scores(self, phrases: List[str]) -> None:
-        from sentence_transformers import SentenceTransformer, util
+    def add_sequences(self, sequences: List[str]) -> None:
+        for sent, emb in zip(sequences, self.embed(sequences)):
+            self.seq2vec[sent] = emb
 
-        model = SentenceTransformer("all-MiniLM-L6-v2", device=self.device)
-        # device = torch.device(self.device if torch.cuda.is_available() else "cpu")
-        # print(device)
-        # model.to(device)
+    def embed(self, sequences: List[str]) -> List[np.ndarray]:
+        from sentence_transformers import SentenceTransformer
 
-        # TODO: check these parameters
-        paraphrases = util.paraphrase_mining(
-            model,
-            phrases,
-            show_progress_bar=True,
-            batch_size=32,
-            max_pairs=20000,
-            corpus_chunk_size=5000,
-            query_chunk_size=1000,
+        model = SentenceTransformer("all-MiniLM-L6-v2")
+        embeddings = model.encode(sequences)
+        return embeddings  # type: ignore
+
+    def cosine_similarity(self, seq1: str, seq2: str) -> float:
+        from scipy.spatial.distance import cosine
+
+        if seq1 not in self.seq2vec:
+            self.seq2vec[seq1] = self.embed([seq1])[0]
+        if seq2 not in self.seq2vec:
+            self.seq2vec[seq2] = self.embed([seq2])[0]
+        return 1 - cosine(self.seq2vec[seq1], self.seq2vec[seq2])  # type: ignore
+
+    def visualize(self):
+        """
+        Visualize the vectors in 2D space using UMAP and bokeh
+        """
+        import umap
+        from bokeh.io import output_notebook, show
+        from bokeh.plotting import figure
+
+        # create 2 dimensional embedding
+        umap_embeddings = umap.UMAP(
+            n_neighbors=15, n_components=2, metric="cosine"
+        ).fit_transform(list(self.seq2vec.values()))
+
+        # plot the 2 dimensional data points
+        plot = figure(
+            title="UMAP projection of the DNA sequences",
+            plot_width=600,
+            plot_height=600,
         )
-        return paraphrases
+        plot.scatter(
+            x=umap_embeddings[:, 0],
+            y=umap_embeddings[:, 1],
+            marker="circle",
+            line_color="navy",
+            fill_color="orange",
+            alpha=0.5,
+        )
 
-    def run(
-        self,
-        mode: Literal["arguments", "relationships"] = "arguments",
-        template_assistance: Literal[True, False] = True,
-    ) -> None:
-
-        if self.scores:
-            raise Exception(
-                "Recompiling previously compiled scores. Please explicitly call: clear_scores()"
-            )
-
-        if mode == "arguments":
-
-            if not template_assistance:
-                arg1s = self.dataframe["Argument1"].to_list()
-                arg2s = self.dataframe["Argument2"].to_list()
-                stopper = len(arg1s)
-                paraphrases = self.get_scores(arg1s + arg2s)  # watch for top-K
-            else:
-                arg1s = self.dataframe["Argument1+Template"].to_list()
-                arg2s = self.dataframe["Argument2+Template"].to_list()
-                stopper = len(arg1s)
-                paraphrases = self.get_scores(arg1s + arg2s)  # watch for top-K
-
-            # Store optimally
-            for paraphrase in paraphrases:
-
-                score, i, j = paraphrase
-                first_phrase: str
-                second_phrase: str
-
-                if i >= stopper:
-                    first_phrase = arg2s[i - stopper]
-                else:
-                    first_phrase = arg1s[i]
-
-                if j >= stopper:
-                    second_phrase = arg2s[j - stopper]
-                else:
-                    second_phrase = arg1s[j]
-
-                # write it both ways - this is a symmetric operation
-                self.scores[
-                    self.delimiter.join([first_phrase, second_phrase])
-                ] = score  # optimized for speed
-                self.scores[
-                    self.delimiter.join([second_phrase, first_phrase])
-                ] = score  # optimized for speed
-
-                # you are not guaranteed to get all pairs here. See:
-                # https://www.sbert.net/examples/applications/paraphrase-mining/README.html
-
-        elif mode == "relationships":
-
-            if not template_assistance:
-                total_relationships = self.dataframe["Total_Relationships"].to_list()
-                paraphrases = self.get_scores(total_relationships)  # watch for top-K
-            else:
-                total_relationships = self.dataframe[
-                    "Total_Relationships+Template"
-                ].to_list()
-                paraphrases = self.get_scores(total_relationships)  # watch for top-K
-
-            # Store optimally
-            for paraphrase in paraphrases:
-                score, i, j = paraphrase
-                self.scores[
-                    self.delimiter.join(
-                        [total_relationships[i], total_relationships[j]]
-                    )
-                ] = score
-                self.scores[
-                    self.delimiter.join(
-                        [total_relationships[j], total_relationships[i]]
-                    )
-                ] = score
-                # optimized for speed
-
-    def get_score(self, phrase1: str, phrase2: str) -> float:
-        try:
-            return self.scores[self.delimiter.join([phrase1, phrase2])]
-        except KeyError:
-            return -1  # works for cosine
+        show(plot)
