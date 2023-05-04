@@ -1,5 +1,7 @@
 """
-Consider rewriting in generator form
+Consider rewriting in generator form.
+It doesn't appear that we need it though.
+Bulk is a list of strings.
 """
 
 from typing import Any, List, Literal
@@ -7,23 +9,22 @@ import argparse
 import numpy as np
 from tqdm import tqdm
 
-parser = argparse.ArgumentParser(description="Splicing long sequences for constructing LLM training data")
-parser.add_argument('--mode', help="Splicing Mode", type=str, choices=['random','fixed'])
-parser.add_argument('--N', help="Number of splices", type=int)
-parser.add_argument('--datapath', help="Data path for the input and output data", type=str)
+parser = argparse.ArgumentParser('datapath', description="Path to I/O data")
+parser = argparse.add_argument('mode', description="Splicing Mode")
+parser = argparse.add_argument('n', description="Number of splices")
 
 args = parser.parse_args()
 np.random.seed(42)
 
 
-class Sequence:
+class Splicer:
     def __init__(self, sequence: str = "", limit: int = 5) -> None:
         if len(sequence) <= limit:
             raise ValueError("Sequence is of limited length.")
         sequence = sequence.replace("\n", "")  # incase newline characters exist
         self.sequence = sequence
 
-    def split(
+    def splice(
         self,
         mode: Literal["random", "fixed"] = "random",
         sample_length: Any = None,
@@ -62,16 +63,16 @@ class Sequence:
 
 
 if __name__ == "__main__":
-
+    
     import os
-
-    data_path = args.datapath
+    
+    data_path = args["data_path"]
     with open(os.path.join(data_path, "sample.txt"), "r") as f:
         sequence = f.read()
 
-    sequence = Sequence(sequence)
-    subsequences = sequence.split(
-        mode=args.mode, sample_length=[5, 30], number_of_sequences=args.N
+    sequence = Splicer(sequence)
+    subsequences = sequence.splice(
+        mode=args["mode"], sample_length=[5, 30], number_of_sequences=args["n"]
     )
 
     with open(os.path.join(data_path, "subsequences_sample.txt"), "w+") as f:
