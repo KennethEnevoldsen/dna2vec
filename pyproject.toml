@@ -9,7 +9,7 @@ description = ""
 authors = []
 
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 1 - Pre-alpha",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",

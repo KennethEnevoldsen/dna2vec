@@ -7,22 +7,23 @@ import argparse
 import numpy as np
 from tqdm import tqdm
 
-parser = argparse.ArgumentParser('datapath', description="Path to I/O data")
-parser = argparse.add_argument('mode', description="Splicing Mode")
-parser = argparse.add_argument('n', description="Number of splices")
+parser = argparse.ArgumentParser(description="Splicing long sequences for constructing LLM training data")
+parser.add_argument('--mode', help="Splicing Mode", type=str, choices=['random','fixed'])
+parser.add_argument('--N', help="Number of splices", type=int)
+parser.add_argument('--datapath', help="Data path for the input and output data", type=str)
 
 args = parser.parse_args()
 np.random.seed(42)
 
 
-class Splicer:
+class Sequence:
     def __init__(self, sequence: str = "", limit: int = 5) -> None:
         if len(sequence) <= limit:
             raise ValueError("Sequence is of limited length.")
         sequence = sequence.replace("\n", "")  # incase newline characters exist
         self.sequence = sequence
 
-    def splice(
+    def split(
         self,
         mode: Literal["random", "fixed"] = "random",
         sample_length: Any = None,
@@ -61,16 +62,16 @@ class Splicer:
 
 
 if __name__ == "__main__":
-    
+
     import os
-    
-    data_path = args["data_path"]
+
+    data_path = args.datapath
     with open(os.path.join(data_path, "sample.txt"), "r") as f:
         sequence = f.read()
 
-    sequence = Splicer(sequence)
-    subsequences = sequence.splice(
-        mode=args["mode"], sample_length=[5, 30], number_of_sequences=args["n"]
+    sequence = Sequence(sequence)
+    subsequences = sequence.split(
+        mode=args.mode, sample_length=[5, 30], number_of_sequences=args.N
     )
 
     with open(os.path.join(data_path, "subsequences_sample.txt"), "w+") as f:
