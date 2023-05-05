@@ -9,7 +9,7 @@ description = ""
 authors = []
 
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 1 - Pre-alpha",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
@@ -35,6 +35,9 @@ dependencies = [
     "bokeh>=1.10.0",
     "jupyter_bokeh",
     "umap-learn>=0.1.1",
+    "tqdm>=4.62.0",
+    "pinecone-client>2.2.0"
+
 ]
 
 [project.optional-dependencies]
