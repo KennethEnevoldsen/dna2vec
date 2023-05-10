@@ -75,7 +75,7 @@ class Encoder(nn.Module):
         Default values taken from miniLM v6
         https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/blob/main/config.json
         """
-        super(Encoder, self).__init__()
+        super().__init__()
         self.vocab_size = vocab_size
         self.embedding_dim = embedding_dim
         self.dropout = dropout
