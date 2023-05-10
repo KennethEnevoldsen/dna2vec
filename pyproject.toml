@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dna2vec"
-version = "0.0.0"
+version = "0.0.1"
 description = ""
 authors = []
 
@@ -22,18 +22,10 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
 ]
 
-keywords = [
-    "nlp",
-    "danish",
-    "spacy-universe",
-]
 requires-python = ">=3.9"
 dependencies = [
     "torch>=2.0.0",
-    "pydantic>=1.8.2",
     "sentence-transformers>=2.2.0",
-    "bokeh>=1.10.0",
-    "jupyter_bokeh",
     "umap-learn>=0.1.1",
     "tqdm>=4.62.0",
     "pinecone-client>2.2.0"
@@ -46,9 +38,8 @@ dev = [
   "black[jupyter]>=23.3.0",
 ]
 tests = [
-  "pytest>=7.1.2,<7.4.0",
-  "pytest-cov>=3.0.0,<3.1.0",
-  "pandas>=2.0.0"
+  "pytest>=7.1.2",
+  "pytest-cov>=3.0.0",
 ]
 
 
@@ -145,12 +136,6 @@ exclude = [
   ".git",
   "__pycache__",
   "dev/**",
-  "training/v0.0.0/**",
-  "training/v0.1.0/**",
-  "training/v0.1.1/**",
-  "training/v0.2.0/**",
-  "training/ner_fine_grained/**",
-  "papers/DaCy-A-Unified-Framework-for-Danish-NLP/**"
 ]
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
