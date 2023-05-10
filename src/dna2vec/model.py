@@ -1,10 +1,61 @@
 """
 A implementation of the contrastive siamese architecture from sentence transformers to learn DNA embeddings.
 """
-from typing import Literal, Optional
+import math
+from typing import Literal, Type
 
 import torch
 import torch.nn as nn
+
+
+class SinusoidalPositionalEncoding(nn.Module):
+    """
+    Derived from https://pytorch.org/tutorials/beginner/transformer_tutorial.html
+    """
+
+    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 512):
+        super().__init__()
+        self.dropout = nn.Dropout(p=dropout)
+        position = torch.arange(max_len).unsqueeze(1)
+        div_term = torch.exp(
+            torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model)
+        )
+        pe = torch.zeros(max_len, 1, d_model)
+        pe[:, 0, 0::2] = torch.sin(position * div_term)
+        pe[:, 0, 1::2] = torch.cos(position * div_term)
+        self.register_buffer("pe", pe)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x.names = ["sequence", "batch", "embedding"]
+        x = x + self.pe[: x.size(0)]  # type: ignore
+        return self.dropout(x)
+
+
+class LearnedPositionalEncoding(nn.Module):
+    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 512):
+        super().__init__()
+        self.dropout = nn.Dropout(p=dropout)
+        self.max_len = max_len
+
+        self.positional_embedding = nn.Embedding(
+            num_embeddings=max_len,
+            embedding_dim=d_model,
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x.names = ["batch", "sequence"]
+
+        # create a sequence of integers from 0 to max_seq_len of seq
+        # this will be the positional embedding
+        seq_length = x.shape[1]
+        assert seq_length <= self.max_len, "sequence length is greater than max_seq_len"
+        positions = torch.arange(seq_length)
+        positions = positions.expand(x.shape[:2])
+
+        assert positions.shape == x.shape, "positions and input tensor shape mismatch"
+        x = self.positional_embedding(positions)
+        # emb.names = ["batch", "sequence", "embedding"]
+        return self.dropout(x)
 
 
 class Encoder(nn.Module):
@@ -13,28 +64,29 @@ class Encoder(nn.Module):
         embedding_dim: int = 384,
         dim_feedforward: int = 1536,
         vocab_size: int = 4,
-        max_position_embeddings: int = 512,
         num_heads: int = 12,
         num_layers: int = 6,
         dropout: float = 0.1,
         activation: Literal["relu", "gelu"] = "gelu",
-        device: Optional[torch.device] = None,
+        pos_embedding: Type[nn.Module] = SinusoidalPositionalEncoding,
+        max_position_embeddings: int = 512,
     ):
         """
         Default values taken from miniLM v6
         https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/blob/main/config.json
         """
         super(Encoder, self).__init__()
-        self.max_seq_len = max_position_embeddings
         self.vocab_size = vocab_size
         self.embedding_dim = embedding_dim
         self.dropout = dropout
         self.num_heads = num_heads
         self.num_layers = num_layers
 
-        if device is None:
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.device = device
+        self.positional_embedding = pos_embedding(
+            d_model=embedding_dim,
+            dropout=dropout,
+            max_len=max_position_embeddings,
+        )
 
         self.embedding = nn.Embedding(
             num_embeddings=vocab_size,
@@ -59,40 +111,13 @@ class Encoder(nn.Module):
             encoder_layer=encoder_layer, num_layers=num_layers, mask_check=False
         )
 
-    def get_positional_embedding(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        get positional embeddings for the input tensor
-
-        Args:
-            x (torch.Tensor): input tensor of shape (batch, seq)
-
-        Returns:
-            torch.Tensor: positional embeddings of shape (batch, seq, embedding_dim)
-        """
-        # x.names = ["batch", "sequence"]
-
-        # create a sequence of integers from 0 to max_seq_len of seq
-        # this will be the positional embedding
-        seq_length = x.shape[1]
-        assert (
-            seq_length <= self.max_seq_len
-        ), "sequence length is greater than max_seq_len"
-        positions = torch.arange(seq_length, device=self.device)
-        positions = positions.expand(x.shape[:2])
-
-        assert positions.shape == x.shape, "positions and input tensor shape mismatch"
-        emb = self.positional_embedding(positions)
-        # emb.names = ["batch", "sequence", "embedding"]
-        return emb
-
     def forward(self, x):
         # x.names = ["batch", "sequence"]
         # embedding does not support named tensors
         x = x.rename(None)
 
         # Embed
-        x = self.embedding(x) + self.get_positional_embedding(x)
-
+        x = self.embedding(x) + self.positional_embedding(x)
         # x.names = ["batch", "sequence", "embedding"]
 
         # Contextualize embeddings
