@@ -1,7 +1,14 @@
 {
   "version": "1.0",
   "truncation": null,
-  "padding": null,
+  "padding": {
+    "strategy": "BatchLongest",
+    "direction": "Right",
+    "pad_to_multiple_of": null,
+    "pad_id": 10003,
+    "pad_type_id": 0,
+    "pad_token": "[PAD]"
+  },
   "added_tokens": [],
   "normalizer": null,
   "pre_tokenizer": {
@@ -78,6 +85,7 @@
     "continuing_subword_prefix": null,
     "end_of_word_suffix": null,
     "fuse_unk": false,
+    "byte_fallback": false,
     "vocab": {
       "A": 0,
       "C": 1,
