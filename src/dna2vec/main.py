@@ -8,7 +8,9 @@ from typing import Optional
 
 import typer
 import wandb
+from torch.utils.data import DataLoader
 
+from dna2vec.dataset import create_collate_fn
 from dna2vec.model import Encoder
 from dna2vec.trainer import ContrastiveTrainer
 from dna2vec.utils import cfg_to_wandb_dict, get_config_from_path
@@ -30,20 +32,31 @@ def main(config_path: Optional[str] = None):
 
     model_cfg = config.model_config
     training_cfg = config.training_config
+    dataset_cfg = config.dataset_config
 
+    # MODEL: Model and tokenizer
     model = Encoder(**model_cfg.dict())
+    collate_fn = create_collate_fn(tokenizer_path=model_cfg.tokenizer_path)
 
+    # DATASET: Dataset creation
+    dataset = dataset_cfg.dataset(**dataset_cfg.dict())
+
+    # TRAINING: Optimizer, data loader and trainer
     optimizer_cfg = training_cfg.optimizer_config
     optimizer = training_cfg.optimizer(model.parameters(), **optimizer_cfg.dict())
+    dataloader = DataLoader(
+        dataset, batch_size=training_cfg.batch_size, collate_fn=collate_fn
+    )
 
     trainer = ContrastiveTrainer(
         model=model,
         criterion=training_cfg.criterion,
         optimizer=optimizer,
-        train_dataloader=training_cfg.train_dataloader,
+        train_dataloader=dataloader,
         device=training_cfg.device,
     )
 
+    # TRAINING: Training loop
     trainer.train(
         max_steps=training_cfg.max_steps,
         log_interval=training_cfg.log_interval,

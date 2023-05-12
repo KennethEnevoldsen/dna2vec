@@ -2,14 +2,19 @@
 Base configurations
 """
 
-import json
-from typing import Literal, Optional, Type
+from pathlib import Path
+from typing import Literal, Type
 
 import torch
 from pydantic import BaseModel
 from torch import nn
+from torch.utils.data import Dataset
 
+from dna2vec.dataset import FastaSamplerDataset
 from dna2vec.model import SinusoidalPositionalEncoding
+
+project_path = Path(__file__).parent.parent
+tokenizer_path = project_path / "model" / "tokenizers" / "dna_tokenizer_10k.json"
 
 
 class ModelConfigSchema(BaseModel):
@@ -22,6 +27,7 @@ class ModelConfigSchema(BaseModel):
     activation: Literal["relu", "gelu"] = "gelu"
     pos_embedding: Type[nn.Module] = SinusoidalPositionalEncoding
     max_position_embeddings: int = 512
+    tokenizer_path: Path = tokenizer_path
 
     class Config:
         arbitrary_types_allowed = True
@@ -47,6 +53,14 @@ class TrainingConfigSchema(BaseModel):
         arbitrary_types_allowed = True
 
 
+class DatasetConfigSchema(BaseModel):
+    dataset: Type[Dataset] = FastaSamplerDataset
+    fasta_file: Path = project_path / "tests" / "data" / "NC_000002.12.txt"
+    range_mean: float = 200
+    range_std: float = 20
+
+
 class ConfigSchema(BaseModel):
     model_config: ModelConfigSchema = ModelConfigSchema()
     training_config: TrainingConfigSchema = TrainingConfigSchema()
+    dataset_config: DatasetConfigSchema = DatasetConfigSchema()

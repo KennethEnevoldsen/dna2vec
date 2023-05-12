@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Dict, Tuple
 
 import torch
-from torch.utils.data import DataLoader, IterableDataset
+from torch.utils.data import IterableDataset
 
 from dna2vec.tokenizer import CustomTokenizer
 
