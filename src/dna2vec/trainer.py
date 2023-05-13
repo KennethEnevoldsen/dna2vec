@@ -30,6 +30,22 @@ class ContrastiveTrainer:
         self.similarity = similarity
         self.pooling = pooling
 
+    def model_to_device(self, device: Optional[torch.device] = None) -> None:
+        """
+        Move the model to the specified device
+
+        Args:
+            device: Device to move the model to
+        """
+        if device is not None:
+            self.device = device
+        self.encoder.to(self.device)
+
+    def dict_to_device(self, d: dict):
+        for k, v in d.items():
+            if isinstance(v, torch.Tensor):
+                d[k] = v.to(self.device)
+
     def train(
         self,
         max_steps: Optional[int] = None,
@@ -42,8 +58,12 @@ class ContrastiveTrainer:
             steps: Number of steps to train the model for
             log_interval: Number of steps after which to log the training loss
         """
+        self.model_to_device()
         self.encoder.train()
         for step, (x_1, x_2) in enumerate(self.train_dataloader):
+            self.dict_to_device(x_1)
+            self.dict_to_device(x_2)
+
             if max_steps is not None and step >= max_steps:
                 break
 
