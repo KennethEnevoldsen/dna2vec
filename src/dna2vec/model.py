@@ -109,7 +109,7 @@ class Encoder(nn.Module):
         )
 
     def forward(
-        self, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor]
+        self, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor]=None
     ) -> torch.Tensor:
         input_ids = input_ids.rename(None)
         # input_ids.names = ["batch", "sequence"]
