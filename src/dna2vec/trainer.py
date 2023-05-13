@@ -7,7 +7,7 @@ from typing import Optional
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-
+from torch.optim.lr_scheduler import LRScheduler
 import wandb
 
 
@@ -20,6 +20,7 @@ class ContrastiveTrainer:
         loss: nn.Module,
         optimizer: torch.optim.Optimizer,
         train_dataloader: DataLoader,
+        scheduler: LRScheduler,
         device: torch.device,
     ):
         self.encoder = encoder
@@ -29,6 +30,8 @@ class ContrastiveTrainer:
         self.device = device
         self.similarity = similarity
         self.pooling = pooling
+        self.scheduler = scheduler
+
 
     def model_to_device(self, device: Optional[torch.device] = None) -> None:
         """
@@ -48,6 +51,7 @@ class ContrastiveTrainer:
 
     def train(
         self,
+        training_config,
         max_steps: Optional[int] = None,
         log_interval: int = 100,
     ) -> None:
@@ -67,7 +71,6 @@ class ContrastiveTrainer:
             if max_steps is not None and step >= max_steps:
                 break
 
-            self.optimizer.zero_grad()
 
             last_hidden_x_1 = self.encoder(**x_1)
             last_hidden_x_2 = self.encoder(**x_2)
@@ -75,15 +78,38 @@ class ContrastiveTrainer:
             y_2 = self.pooling(last_hidden_x_2, attention_mask=x_2["attention_mask"])
 
             # Calculate similarity
-            y_1 = y_1.rename(None)  # names: [batch, embedding]
-            y_2 = y_2.rename(None)  # names: [batch, embedding]
+            # y_1 # names: [batch, embedding]
+            # y_2 # names: [batch, embedding]
             sim = self.similarity(y_1.unsqueeze(1), y_2.unsqueeze(0))
 
             labels = torch.arange(sim.size(0)).long().to(self.device)
 
             loss = self.loss(sim, labels)
-            loss.backward()
-            self.optimizer.step()
 
+            loss = loss / training_config.accumulation_steps
+            loss.backward()
+            if (step + 1) % training_config.accumulation_steps == 0:
+                # Gradient clipping
+                torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), training_config.max_grad_norm) # type: ignore
+
+                self.optimizer.step()
+                self.optimizer.zero_grad()
+                self.scheduler.step()
+
+
+        
             if step % log_interval == 0:
-                wandb.log({"loss": loss.item()})
+                current_lr = self.optimizer.param_groups[0]["lr"]
+                wandb.log({"loss": loss, "step": step, "lr": current_lr})
+
+            # trying to resolve the CUDA out of memory error
+            if step % 1000 == 0:
+                torch.cuda.empty_cache()
+
+            # delete the tensors: https://discuss.pytorch.org/t/gpu-memory-consumption-increases-while-training/2770/3?u=nagabhushansn95
+            del y_1, y_2, sim, labels, loss
+            for k, v in x_1.items():
+                del v
+            for k, v in x_2.items():
+                del v
+            del last_hidden_x_1, last_hidden_x_2, x_1, x_2

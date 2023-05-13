@@ -6,7 +6,7 @@ import torch
 
 def test_main():
     CONFIG = ConfigSchema(
-        training_config=TrainingConfigSchema(max_steps=4, batch_size=4)
+        training_config=TrainingConfigSchema(max_steps=10, batch_size=4, log_interval=1)
     )
     main(CONFIG, wandb_mode="dryrun")
 

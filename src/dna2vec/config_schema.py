@@ -14,6 +14,13 @@ from dna2vec.dataset import FastaSamplerDataset
 from dna2vec.model import AveragePooler, SinusoidalPositionalEncoding
 from dna2vec.similarity import SimilarityWithTemperature
 
+from torch.optim.lr_scheduler import OneCycleLR, LRScheduler
+from functools import partial
+
+scheduler = partial(OneCycleLR, 
+                       max_lr = 1e-4, # Upper learning rate boundaries in the cycle for each parameter group
+                       anneal_strategy = 'cos')
+
 project_path = Path(__file__).parent.parent.parent
 tokenizer_path = (
     project_path / "src" / "model" / "tokenizers" / "dna_tokenizer_10k.json"
@@ -43,6 +50,13 @@ class OptimizerConfigSchema(BaseModel):
     weight_decay: float = 0.0
     eps = 1e-8
 
+class SchedulerConfigSchema(BaseModel):
+    max_lr: float = 1e-3
+    anneal_strategy: Literal["cos", "linear", "polynomial", "constant"] = "cos"
+    total_steps: Optional[int] =None # derived from training config
+
+
+
 
 class TrainingConfigSchema(BaseModel):
     batch_size: int = 64
@@ -51,6 +65,10 @@ class TrainingConfigSchema(BaseModel):
     similarity: Type[nn.Module] = SimilarityWithTemperature
     temperature: float = 0.05  # default derived from SimCSE
     loss: nn.Module = nn.CrossEntropyLoss()
+    accumulation_steps: int = 1
+    max_grad_norm: float = 1.0
+    scheduler: Type[LRScheduler] = OneCycleLR
+    scheduler_config = SchedulerConfigSchema()
 
     max_steps: int = 1000
     log_interval: int = 100

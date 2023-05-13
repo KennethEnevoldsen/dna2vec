@@ -5,6 +5,7 @@ cli interface for training the contrastive self-supervised sequence model
 
 from functools import partial
 from pathlib import Path
+import sched
 from typing import Optional
 
 import typer
@@ -19,7 +20,7 @@ from dna2vec.trainer import ContrastiveTrainer
 from dna2vec.utils import cfg_to_wandb_dict, get_config_from_path
 
 
-def main(config: ConfigSchema, wandb_mode: str = "online"):
+def main(config: ConfigSchema, wandb_mode: str = "online", watch_watch: bool = True):
     """
     Args:
         config: The configuration object
@@ -49,6 +50,8 @@ def main(config: ConfigSchema, wandb_mode: str = "online"):
     # TRAINING: Optimizer, data loader and trainer
     optimizer_cfg = training_cfg.optimizer_config
     optimizer = training_cfg.optimizer(model.parameters(), **optimizer_cfg.dict())
+    training_cfg.scheduler_config.total_steps = training_cfg.max_steps
+    scheduler = training_cfg.scheduler(optimizer, **training_cfg.scheduler_config.dict())
     dataloader = DataLoader(
         dataset, batch_size=training_cfg.batch_size, collate_fn=_collate_fn
     )
@@ -62,15 +65,19 @@ def main(config: ConfigSchema, wandb_mode: str = "online"):
         train_dataloader=dataloader,
         device=training_cfg.device,
         similarity=sim,
+        scheduler=scheduler, 
     )
 
     # log config to wandb
     wandb.init(project="dna2vec", config=cfg_to_wandb_dict(config), mode=wandb_mode)
+    if watch_watch:
+        wandb.watch(model, log="all", log_freq=1, log_graph=True) # just for debugging
 
     # TRAINING: Training loop
     trainer.train(
         max_steps=training_cfg.max_steps,
         log_interval=training_cfg.log_interval,
+        training_config=training_cfg,
     )
 
 

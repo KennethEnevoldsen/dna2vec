@@ -35,3 +35,15 @@ To run the Pinecone-supported encoder and drop, use the following command:
 ```
 python src/dna2vec/pinecone_store.py --inputpath /home/pholur/dna-2-vec/data/subsequences_sample.txt --reupload n --drop y
 ```
+
+# Ideas to try out
+
+
+- [ ] Training optimizations
+    - [x] Add gradient clipping
+    - [ ] Add learning rate scheduler
+    - [x] Add gradient accumulation
+- [ ] Add more data
+    - [ ] Add all of the human genome
+- [ ] Issues
+    - [ ] There might be a memory leak somewhere

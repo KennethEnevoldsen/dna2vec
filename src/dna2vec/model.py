@@ -26,11 +26,12 @@ class SinusoidalPositionalEncoding(nn.Module):
         pe = torch.zeros(max_len, 1, d_model)
         pe[:, 0, 0::2] = torch.sin(position * div_term)
         pe[:, 0, 1::2] = torch.cos(position * div_term)
+        pe = pe.squeeze(1).unsqueeze(0) # (1, max_len, d_model)
         self.register_buffer("pe", pe)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x.names = ["sequence", "batch", "embedding"]
-        return self.pe[: x.size(0)]  # type: ignore
+        # x.names = ["batch", "sequence"]
+        return self.pe[:, :x.size(1), :]  # type: ignore # [batch, seq_len, d_model]
 
 
 class LearnedPositionalEncoding(nn.Module):
@@ -111,7 +112,6 @@ class Encoder(nn.Module):
     def forward(
         self, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor]=None
     ) -> torch.Tensor:
-        input_ids = input_ids.rename(None)
         # input_ids.names = ["batch", "sequence"]
         # embedding does not support named tensors
 
@@ -126,7 +126,7 @@ class Encoder(nn.Module):
         if attention_mask is not None:
             attn = attention_mask == 0  # to boolean
         out = self.trf_encoder(emb, src_key_padding_mask=attn)
-        out.names = ["batch", "sequence", "embedding"]
+        # out.names = ["batch", "sequence", "embedding"]
         return out
 
 
@@ -140,29 +140,28 @@ class AveragePooler(nn.Module):
         super().__init__()
 
     def forward(self, last_hidden, attention_mask):
-        # # Old previous implementation
-        # return (last_hidden * attention_mask.unsqueeze(-1)).sum(
-        #     1
-        # ) / attention_mask.sum(-1).unsqueeze(-1)
+        # Old previous implementation
+        return (last_hidden * attention_mask.unsqueeze(-1)).sum(
+            1
+        ) / attention_mask.sum(-1).unsqueeze(-1)
 
-        last_hidden.names = ["batch", "sequence", "embedding"]
-        attention_mask.names = ["batch", "sequence"]
-        # using named tensors
-        attention_mask = attention_mask.align_to(
-            "batch", "sequence", "embedding"
-        )  # eq. to unsqueeze
+        # last_hidden.names = ["batch", "sequence", "embedding"]
+        # attention_mask.names = ["batch", "sequence"]
+        # # using named tensors
+        # attention_mask = attention_mask.align_to(
+        #     "batch", "sequence", "embedding"
+        # )  # eq. to unsqueeze
 
-        avg_emb = (last_hidden * attention_mask).sum("sequence") / attention_mask.sum(
-            "sequence"
-        )
-        return avg_emb
+        # avg_emb = (last_hidden * attention_mask).sum("sequence") / attention_mask.sum(
+        #     "sequence"
+        # )
+        # return avg_emb
 
 
 if __name__ == "__main__":
     dna_seq = torch.randint(0, 4, (10, 30), dtype=torch.long)
-    dna_seq.names = ["batch", "sequence"]
+    # dna_seq.names = ["batch", "sequence"]
 
     encoder = Encoder()
     output = encoder(dna_seq)
     print(output.shape)
-    print(output.names)
