@@ -4,8 +4,6 @@ from typing import Dict, Tuple
 import torch
 from torch.utils.data import IterableDataset
 
-from dna2vec.tokenizer import CustomTokenizer
-
 
 class FastaSamplerDataset(IterableDataset):
     def __init__(
@@ -62,22 +60,16 @@ class FastaSamplerDataset(IterableDataset):
             yield x_1, x_2
 
 
-def create_collate_fn(tokenizer_path: Path):
-    tokenizer = CustomTokenizer.load(str(tokenizer_path))
+def collate_fn(
+    batch, tokenizer
+) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
+    """
+    collate to max batch size and output a dictionary with two elements
+    ids = matrix of shape (batch_size, max_sequence_length)
+    attention_mask = matrix of shape (batch_size, max_sequence_length)
+    """
+    x_1, x_2 = list(zip(*batch))
+    x_1 = tokenizer.tokenize(x_1)
+    x_2 = tokenizer.tokenize(x_2)
 
-    def collate_fn(batch) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
-        """
-        collate to max batch size and output a dictionary with two elements
-        ids = matrix of shape (batch_size, max_sequence_length)
-        attention_mask = matrix of shape (batch_size, max_sequence_length)
-        """
-        x_1, x_2 = list(zip(*batch))
-        x_1 = tokenizer.tokenize(x_1)
-        x_2 = tokenizer.tokenize(x_2)
-
-        return x_1.to_torch(), x_2.to_torch()
-
-    return collate_fn
-
-
-
+    return x_1.to_torch(), x_2.to_torch()

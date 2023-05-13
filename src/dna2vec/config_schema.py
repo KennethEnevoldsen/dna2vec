@@ -3,7 +3,7 @@ Base configurations
 """
 
 from pathlib import Path
-from typing import Literal, Type
+from typing import Literal, Optional, Type
 
 import torch
 from pydantic import BaseModel
@@ -11,21 +11,25 @@ from torch import nn
 from torch.utils.data import Dataset
 
 from dna2vec.dataset import FastaSamplerDataset
-from dna2vec.model import SinusoidalPositionalEncoding
+from dna2vec.model import AveragePooler, SinusoidalPositionalEncoding
+from dna2vec.similarity import SimilarityWithTemperature
 
-project_path = Path(__file__).parent.parent
-tokenizer_path = project_path / "model" / "tokenizers" / "dna_tokenizer_10k.json"
+project_path = Path(__file__).parent.parent.parent
+tokenizer_path = (
+    project_path / "src" / "model" / "tokenizers" / "dna_tokenizer_10k.json"
+)
 
 
 class ModelConfigSchema(BaseModel):
     embedding_dim: int = 384
     dim_feedforward: int = 1536
-    vocab_size: int = 4
+    vocab_size: Optional[int] = None  # derived from tokenizer
     num_heads: int = 12
     num_layers: int = 6
     dropout: float = 0.1
     activation: Literal["relu", "gelu"] = "gelu"
     pos_embedding: Type[nn.Module] = SinusoidalPositionalEncoding
+    pooling: nn.Module = AveragePooler()
     max_position_embeddings: int = 512
     tokenizer_path: Path = tokenizer_path
 
@@ -34,7 +38,7 @@ class ModelConfigSchema(BaseModel):
 
 
 class OptimizerConfigSchema(BaseModel):
-    learning_rate: float = 0.001
+    lr: float = 0.001
     betas: tuple[float, float] = (0.9, 0.999)
     weight_decay: float = 0.0
     eps = 1e-8
@@ -44,6 +48,9 @@ class TrainingConfigSchema(BaseModel):
     batch_size: int = 64
     optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam
     optimizer_config: OptimizerConfigSchema = OptimizerConfigSchema()
+    similarity: Type[nn.Module] = SimilarityWithTemperature
+    temperature: float = 0.05  # default derived from SimCSE
+    loss: nn.Module = nn.CrossEntropyLoss()
 
     max_steps: int = 1000
     log_interval: int = 100

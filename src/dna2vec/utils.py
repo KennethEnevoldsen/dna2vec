@@ -36,7 +36,12 @@ def cfg_to_wandb_dict(cfg: BaseModel) -> dict:
                 for k, v in _cfg_to_wandb_dict(value):
                     yield f"{key}.{k}", v
             elif callable(value):
-                yield key, value.__name__
+                try:
+                    name = value.__name__
+                except:
+                    name = value.__class__.__name__
+
+                yield key, name
             else:
                 # check if value if json serializable
                 try:

@@ -6,24 +6,29 @@ from typing import Optional
 
 import torch
 import torch.nn as nn
-import wandb
 from torch.utils.data import DataLoader
+
+import wandb
 
 
 class ContrastiveTrainer:
     def __init__(
         self,
-        model: nn.Module,
-        criterion: nn.Module,
+        encoder: nn.Module,
+        pooling: nn.Module,
+        similarity: nn.Module,
+        loss: nn.Module,
         optimizer: torch.optim.Optimizer,
         train_dataloader: DataLoader,
         device: torch.device,
     ):
-        self.model = model
-        self.criterion = criterion
+        self.encoder = encoder
+        self.loss = loss
         self.train_dataloader = train_dataloader
         self.optimizer = optimizer
         self.device = device
+        self.similarity = similarity
+        self.pooling = pooling
 
     def train(
         self,
@@ -37,23 +42,28 @@ class ContrastiveTrainer:
             steps: Number of steps to train the model for
             log_interval: Number of steps after which to log the training loss
         """
-        self.model.train()
-        for step, batch in enumerate(self.train_dataloader):
+        self.encoder.train()
+        for step, (x_1, x_2) in enumerate(self.train_dataloader):
             if max_steps is not None and step >= max_steps:
                 break
 
             self.optimizer.zero_grad()
-            # we could consider using a label matrix instead
-            # e.g. see:
-            # https://www.kaggle.com/code/debarshichanda/pytorch-supervised-contrastive-learning
-            # but let us start with the simple approach first
-            y_1 = self.model(batch)
-            y_2 = self.model(batch)
-            loss = self.criterion(y_1, y_2)
+
+            last_hidden_x_1 = self.encoder(**x_1)
+            last_hidden_x_2 = self.encoder(**x_2)
+            y_1 = self.pooling(last_hidden_x_1, attention_mask=x_1["attention_mask"])
+            y_2 = self.pooling(last_hidden_x_2, attention_mask=x_2["attention_mask"])
+
+            # Calculate similarity
+            y_1 = y_1.rename(None)  # names: [batch, embedding]
+            y_2 = y_2.rename(None)  # names: [batch, embedding]
+            sim = self.similarity(y_1.unsqueeze(1), y_2.unsqueeze(0))
+
+            labels = torch.arange(sim.size(0)).long().to(self.device)
+
+            loss = self.loss(sim, labels)
             loss.backward()
             self.optimizer.step()
 
             if step % log_interval == 0:
                 wandb.log({"loss": loss.item()})
-
-

@@ -2,7 +2,7 @@
 A implementation of the contrastive siamese architecture from sentence transformers to learn DNA embeddings.
 """
 import math
-from typing import Literal, Type
+from typing import Dict, Literal, Optional, Type
 
 import torch
 import torch.nn as nn
@@ -13,9 +13,12 @@ class SinusoidalPositionalEncoding(nn.Module):
     Derived from https://pytorch.org/tutorials/beginner/transformer_tutorial.html
     """
 
-    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 512):
+    def __init__(
+        self,
+        d_model: int,
+        max_len: int = 512,
+    ):
         super().__init__()
-        self.dropout = nn.Dropout(p=dropout)
         position = torch.arange(max_len).unsqueeze(1)
         div_term = torch.exp(
             torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model)
@@ -27,14 +30,12 @@ class SinusoidalPositionalEncoding(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x.names = ["sequence", "batch", "embedding"]
-        x = x + self.pe[: x.size(0)]  # type: ignore
-        return self.dropout(x)
+        return self.pe[: x.size(0)]  # type: ignore
 
 
 class LearnedPositionalEncoding(nn.Module):
-    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 512):
+    def __init__(self, d_model: int, max_len: int = 512):
         super().__init__()
-        self.dropout = nn.Dropout(p=dropout)
         self.max_len = max_len
 
         self.positional_embedding = nn.Embedding(
@@ -55,15 +56,15 @@ class LearnedPositionalEncoding(nn.Module):
         assert positions.shape == x.shape, "positions and input tensor shape mismatch"
         x = self.positional_embedding(positions)
         # emb.names = ["batch", "sequence", "embedding"]
-        return self.dropout(x)
+        return x
 
 
 class Encoder(nn.Module):
     def __init__(
         self,
+        vocab_size: int = 4,
         embedding_dim: int = 384,
         dim_feedforward: int = 1536,
-        vocab_size: int = 4,
         num_heads: int = 12,
         num_layers: int = 6,
         dropout: float = 0.1,
@@ -81,21 +82,15 @@ class Encoder(nn.Module):
         self.dropout = dropout
         self.num_heads = num_heads
         self.num_layers = num_layers
+        self.emb_dropout = nn.Dropout(p=dropout)
 
         self.positional_embedding = pos_embedding(
             d_model=embedding_dim,
-            dropout=dropout,
             max_len=max_position_embeddings,
         )
 
         self.embedding = nn.Embedding(
             num_embeddings=vocab_size,
-            embedding_dim=embedding_dim,
-        )
-
-        # learned positional embeddings, we should probably try with something else
-        self.positional_embedding = nn.Embedding(
-            num_embeddings=max_position_embeddings,
             embedding_dim=embedding_dim,
         )
 
@@ -106,24 +101,61 @@ class Encoder(nn.Module):
             dim_feedforward=dim_feedforward,
             dropout=dropout,
             activation=activation,
+            batch_first=True,
+            norm_first=True,  # following: https://arxiv.org/pdf/2002.04745.pdf
         )
         self.trf_encoder = nn.TransformerEncoder(
-            encoder_layer=encoder_layer, num_layers=num_layers, mask_check=False
+            encoder_layer=encoder_layer, num_layers=num_layers
         )
 
-    def forward(self, x):
-        # x.names = ["batch", "sequence"]
+    def forward(
+        self, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor]
+    ) -> torch.Tensor:
+        input_ids = input_ids.rename(None)
+        # input_ids.names = ["batch", "sequence"]
         # embedding does not support named tensors
-        x = x.rename(None)
 
         # Embed
-        x = self.embedding(x) + self.positional_embedding(x)
-        # x.names = ["batch", "sequence", "embedding"]
+        emb = self.emb_dropout(
+            self.embedding(input_ids) + self.positional_embedding(input_ids)
+        )
+        # emb.names = ["batch", "sequence", "embedding"]
 
         # Contextualize embeddings
-        x = self.trf_encoder(x)
-        x.names = ["batch", "sequence", "embedding"]
-        return x
+        attn = None
+        if attention_mask is not None:
+            attn = attention_mask == 0  # to boolean
+        out = self.trf_encoder(emb, src_key_padding_mask=attn)
+        out.names = ["batch", "sequence", "embedding"]
+        return out
+
+
+class AveragePooler(nn.Module):
+    """
+    Parameter-free poolers to get the sentence embedding
+    # derived from https://github.com/princeton-nlp/SimCSE/blob/13361d0e29da1691e313a94f003e2ed1cfa97fef/simcse/models.py#LL49C1-L84C1
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, last_hidden, attention_mask):
+        # # Old previous implementation
+        # return (last_hidden * attention_mask.unsqueeze(-1)).sum(
+        #     1
+        # ) / attention_mask.sum(-1).unsqueeze(-1)
+
+        last_hidden.names = ["batch", "sequence", "embedding"]
+        attention_mask.names = ["batch", "sequence"]
+        # using named tensors
+        attention_mask = attention_mask.align_to(
+            "batch", "sequence", "embedding"
+        )  # eq. to unsqueeze
+
+        avg_emb = (last_hidden * attention_mask).sum("sequence") / attention_mask.sum(
+            "sequence"
+        )
+        return avg_emb
 
 
 if __name__ == "__main__":
