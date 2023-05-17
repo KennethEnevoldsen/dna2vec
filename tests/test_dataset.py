@@ -4,7 +4,7 @@ from pathlib import Path
 from torch.utils.data import DataLoader # type: ignore
 
 from dna2vec.dataset import FastaSamplerDataset, collate_fn
-from dna2vec.tokenizer import CustomTokenizer
+from dna2vec.tokenizer import BPTokenizer
 
 
 def test_fasta_sampler_dataset():
@@ -30,7 +30,7 @@ def test_collate_fn():
     )
 
     dataset = FastaSamplerDataset(range_mean=100, range_std=10, fasta_file=fasta_file)
-    tokenizer = CustomTokenizer.load(str(tokenizer_path))
+    tokenizer = BPTokenizer.load(str(tokenizer_path))
     _collate_fn = partial(collate_fn, tokenizer=tokenizer)
 
     dataloader = DataLoader(dataset, batch_size=4, collate_fn=_collate_fn)

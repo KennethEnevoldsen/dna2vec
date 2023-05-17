@@ -2,11 +2,14 @@
 A implementation of the contrastive siamese architecture from sentence transformers to learn DNA embeddings.
 """
 import math
-from typing import Dict, Literal, Optional, Type
+from typing import Dict, Literal, Optional, Tuple, Type
 
 import torch
 import torch.nn as nn
 
+from dna2vec.tokenizer  import BPTokenizer
+
+import logging
 
 class SinusoidalPositionalEncoding(nn.Module):
     """
@@ -156,6 +159,60 @@ class AveragePooler(nn.Module):
         #     "sequence"
         # )
         # return avg_emb
+
+
+def model_from_config(cfg) -> Tuple[Encoder, nn.Module, BPTokenizer]:
+    """
+    Create a model from a configuration object
+
+    Args:
+        cfg: The configuration object
+
+    Returns:
+        The model, the pooling layer and the tokenizer
+    """
+    if cfg.model_path is None:
+        logging.info("Creating new model")
+
+        # create model
+        model_kwargs = cfg.dict()
+        model_kwargs.pop("model_path")
+        pooler = model_kwargs.pop("pooling")
+        tokenizer_path = model_kwargs.pop("tokenizer_path")
+        tokenizer = BPTokenizer.load(str(tokenizer_path))
+
+        if cfg.vocab_size is None:
+            model_kwargs["vocab_size"] = tokenizer.vocab_size + 1
+            cfg.vocab_size = tokenizer.vocab_size + 1
+
+        model = Encoder(**model_kwargs)
+
+        return model, pooler, tokenizer
+
+    # check if model_path exists
+    if not cfg.model_path.exists():
+        logging.warning(f"Model path {cfg.model_path} does not exist, creating new model")
+        cfg.model_path = None
+        return model_from_config(cfg)
+
+    # load model
+    logging.info(f"Loading model from {cfg.model_path}, ignoring config")
+
+    info_dict = torch.load(cfg.model_path)
+    model_kwargs = info_dict["model_kwargs"]
+    
+    # load tokenizer
+    tokenizer_path = model_kwargs.pop("tokenizer_path")
+    # pooling
+    pooler = model_kwargs.pop("pooling")
+
+    tokenizer = BPTokenizer.load(str(tokenizer_path))
+    model = Encoder(**model_kwargs)
+    model.load_state_dict(info_dict["model_state_dict"])
+
+    return model, pooler, tokenizer
+
+
 
 
 if __name__ == "__main__":

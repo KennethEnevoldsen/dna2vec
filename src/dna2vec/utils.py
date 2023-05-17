@@ -52,3 +52,5 @@ def cfg_to_wandb_dict(cfg: BaseModel) -> dict:
                 yield key, value
 
     return dict(_cfg_to_wandb_dict(cfg_dict))
+
+
