@@ -3,6 +3,7 @@ The trainer module contains the Trainer class, which is responsible for training
 """
 
 from functools import partial
+from pathlib import Path
 from typing import Optional
 
 import torch
@@ -134,7 +135,10 @@ class ContrastiveTrainer:
             del last_hidden_x_1, last_hidden_x_2, x_1, x_2
 
     def save_to_disk(self, path: Optional[str] = None):
-        save_path = self.config.training_config.save_path
+        if path is None:
+            save_path = self.config.training_config.save_path
+        else
+            save_path = Path(path)
         save_path.mkdir(parents=True, exist_ok=True)
 
         # record model state train/eval
