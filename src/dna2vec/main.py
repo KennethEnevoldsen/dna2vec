@@ -14,8 +14,8 @@ from torch.utils.data import DataLoader
 import wandb
 from dna2vec.config_schema import ConfigSchema
 from dna2vec.dataset import collate_fn
-from dna2vec.model import Encoder
-from dna2vec.tokenizer import CustomTokenizer
+from dna2vec.model import model_from_config
+from dna2vec.tokenizer import BPTokenizer
 from dna2vec.trainer import ContrastiveTrainer
 from dna2vec.utils import cfg_to_wandb_dict, get_config_from_path
 
@@ -30,16 +30,7 @@ def main(config: ConfigSchema, wandb_mode: str = "online", watch_watch: bool = T
     dataset_cfg = config.dataset_config
 
     # MODEL: Model and tokenizer
-    model_kwargs = model_cfg.dict()
-    pooler = model_kwargs.pop("pooling")
-    tokenizer_path = model_kwargs.pop("tokenizer_path")
-    tokenizer = CustomTokenizer.load(str(tokenizer_path))
-
-    if model_cfg.vocab_size is None:
-        model_kwargs["vocab_size"] = tokenizer.vocab_size + 1
-        model_cfg.vocab_size = tokenizer.vocab_size + 1
-
-    model = Encoder(**model_kwargs)
+    model, pooler, tokenizer = model_from_config(model_cfg)
     _collate_fn = partial(collate_fn, tokenizer=tokenizer)
 
     # DATASET: Dataset creation
@@ -66,6 +57,8 @@ def main(config: ConfigSchema, wandb_mode: str = "online", watch_watch: bool = T
         device=training_cfg.device,
         similarity=sim,
         scheduler=scheduler, 
+        config=config,
+        tokenizer=tokenizer,
     )
 
     # log config to wandb
@@ -77,7 +70,6 @@ def main(config: ConfigSchema, wandb_mode: str = "online", watch_watch: bool = T
     trainer.train(
         max_steps=training_cfg.max_steps,
         log_interval=training_cfg.log_interval,
-        training_config=training_cfg,
     )
 
 

@@ -45,7 +45,7 @@ class AbstractTokenizer(ABC):
         pass
 
 
-class CustomTokenizer(AbstractTokenizer):
+class BPTokenizer(AbstractTokenizer):
     def __init__(self, vocab_size: int = 20, min_frequency: int = 2):
         self.tokenizer = Tokenizer(models.BPE())
         self.tokenizer.pre_tokenizer = pre_tokenizers.Metaspace()
@@ -77,7 +77,7 @@ class CustomTokenizer(AbstractTokenizer):
         self.tokenizer.save(filename)
 
     @classmethod
-    def load(cls, filename: str) -> "CustomTokenizer":
+    def load(cls, filename: str) -> "BPTokenizer":
         tokenizer = cls()
         tokenizer.tokenizer = Tokenizer.from_file(filename)
         cls.min_frequency = None
@@ -104,7 +104,7 @@ def generate_sequence(file_path, sequence_length, max_sequences=None):
 
 if __name__ == "__main__":
     # Create an instance of the CustomTokenizer
-    tokenizer = CustomTokenizer()
+    tokenizer = BPTokenizer()
 
     # Train the tokenizer from a generator
     # The generator needs to be sufficient.

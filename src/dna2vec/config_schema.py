@@ -39,6 +39,7 @@ class ModelConfigSchema(BaseModel):
     pooling: nn.Module = AveragePooler()
     max_position_embeddings: int = 512
     tokenizer_path: Path = tokenizer_path
+    model_path: Optional[Path] = None # where to load the model from
 
     class Config:
         arbitrary_types_allowed = True
@@ -53,7 +54,7 @@ class OptimizerConfigSchema(BaseModel):
 class SchedulerConfigSchema(BaseModel):
     max_lr: float = 1e-3
     anneal_strategy: Literal["cos", "linear", "polynomial", "constant"] = "cos"
-    total_steps: Optional[int] =None # derived from training config
+    total_steps: Optional[int] =100_000 # derived from training config
 
 
 
@@ -69,6 +70,7 @@ class TrainingConfigSchema(BaseModel):
     max_grad_norm: float = 1.0
     scheduler: Type[LRScheduler] = OneCycleLR
     scheduler_config = SchedulerConfigSchema()
+    save_path: Path = project_path / "models"
 
     max_steps: int = 1000
     log_interval: int = 100

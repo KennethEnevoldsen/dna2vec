@@ -15,3 +15,6 @@ __pycache__
 
 wandb
 data/NC_000002.12.txt
+
+models
+tests/test_models
