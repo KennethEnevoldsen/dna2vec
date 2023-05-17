@@ -9,11 +9,11 @@ import argparse
 import numpy as np
 from tqdm import tqdm
 
-parser = argparse.ArgumentParser('datapath', description="Path to I/O data")
-parser = argparse.add_argument('mode', description="Splicing Mode")
-parser = argparse.add_argument('n', description="Number of splices")
+parser = argparse.ArgumentParser(description="Path to I/O data")
+parser.add_argument('--datapath', type=str)
+parser.add_argument('--mode', type=str)
+parser.add_argument('--n', type=int)
 
-args = parser.parse_args()
 np.random.seed(42)
 
 
@@ -65,18 +65,18 @@ class Splicer:
 if __name__ == "__main__":
     
     import os
-    
-    data_path = args["data_path"]
-    with open(os.path.join(data_path, "sample.txt"), "r") as f:
+    args = parser.parse_args()
+
+    data_path = args.datapath
+    with open(os.path.join(data_path, "NC_000002.12.txt"), "r") as f:
         sequence = f.read()
 
     sequence = Splicer(sequence)
     subsequences = sequence.splice(
-        mode=args["mode"], sample_length=[5, 30], number_of_sequences=args["n"]
+        mode=args.mode, sample_length=[10, 100], number_of_sequences=args.n
     )
 
     with open(os.path.join(data_path, "subsequences_sample.txt"), "w+") as f:
         for seq in subsequences:
             f.write(seq)
             f.write("\n")
-    
