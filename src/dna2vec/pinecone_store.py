@@ -6,10 +6,33 @@ Issues with API timeout on DB creation
 Unstable: https://github.com/pinecone-io/pinecone-python-client/issues
 """
 import string
-
 import pinecone
+import torch
 from tqdm import tqdm
 
+
+
+class EvalModel():
+    def __init__(self, tokenizer, model, pooling, device):
+        self.tokenizer = tokenizer
+        self.model = model
+        
+        self.pooling = pooling
+        self.pooling.to(device)
+        
+        self.model.to(device)
+        self.device = device
+        
+        self.model.eval()
+    
+    def encode(self, x):
+        with torch.no_grad():
+            input_data = self.tokenizer.tokenize(x).to_torch()
+            last_hidden_state = self.model(**input_data)
+            y = self.pooling(last_hidden_state, attention_mask=input_data["attention_mask"])
+            return y.squeeze().detach().cpu().numpy()
+
+        
 
 class PineconeStore:
     def __init__(
@@ -17,11 +40,19 @@ class PineconeStore:
         device: str,
         index_name: str = "dna-1-0504",
         metric: str = "cosine",
-        model_version: str = "all-MiniLM-L6-v2",
+        model_params = None,
     ):
-        from sentence_transformers import SentenceTransformer
-
-        self.model = SentenceTransformer(model_version, device=device)
+        if model_params == None:
+            from sentence_transformers import SentenceTransformer
+            self.model = SentenceTransformer("all-MiniLM-L6-v2", device=device)
+        else:
+            self.model = EvalModel(
+                model_params["tokenizer"],
+                model_params["model"],
+                model_params["pooling"],
+                device = device
+            )
+        
         self.initialize_pinecone_upsertion(metric, index_name)
         self.index_name = index_name
 
@@ -34,10 +65,14 @@ class PineconeStore:
 
         # only create index if it doesn't exist
         if index_name not in pinecone.list_indexes():
+            try:
+                dimension = self.model.get_sentence_embedding_dimension()
+            except:
+                dimension = 384
             pinecone.create_index(
                 name=index_name,
-                dimension=self.model.get_sentence_embedding_dimension(),
-                metric=metric,
+                dimension=dimension,
+                metric=metric
             )
 
         # now connect to the index
