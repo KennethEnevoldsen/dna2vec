@@ -46,13 +46,13 @@ class ModelConfigSchema(BaseModel):
 
 
 class OptimizerConfigSchema(BaseModel):
-    lr: float = 0.001
+    lr: float = 0.0001
     betas: tuple[float, float] = (0.9, 0.999)
-    weight_decay: float = 0.0
+    weight_decay: float = 0.01
     eps = 1e-8
 
 class SchedulerConfigSchema(BaseModel):
-    max_lr: float = 1e-3
+    max_lr: float = 1e-4
     anneal_strategy: Literal["cos", "linear", "polynomial", "constant"] = "cos"
     total_steps: Optional[int] =None # derived from training config
 
