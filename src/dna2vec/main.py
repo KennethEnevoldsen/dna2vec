@@ -67,13 +67,11 @@ def main(config: ConfigSchema, wandb_mode: str = "online", watch_watch: bool = T
         wandb.watch(model, log="all", log_freq=1, log_graph=True) # just for debugging
 
     # TRAINING: Training loop
-    if train:
-        trainer.train(
-            max_steps=training_cfg.max_steps,
-            log_interval=training_cfg.log_interval,
-        )
+    trainer.train(
+        max_steps=training_cfg.max_steps,
+        log_interval=training_cfg.log_interval,
+    )
 
-    return trainer
 
 def main_cli(config_path: Optional[str] = None):
     """
