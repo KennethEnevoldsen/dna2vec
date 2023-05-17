@@ -31,6 +31,8 @@ dependencies = [
     "pinecone-client>2.2.0",
     "pydantic>=1.8.2",
     "typer>=0.3.2",
+    "tokenizers>=0.13.3",
+    "wandb>=0.12.1",
 
 ]
 
