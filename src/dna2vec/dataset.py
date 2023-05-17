@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Literal, Tuple
 
 import torch
 from torch.utils.data import IterableDataset
@@ -11,6 +11,7 @@ class FastaSamplerDataset(IterableDataset):
         range_mean: float,
         range_std: float,
         fasta_file: Path,
+        sampling_strategy: Literal["local", "subsequence"] = "subsequence",
     ):
         super().__init__()
         self.range_mean = range_mean
@@ -22,8 +23,9 @@ class FastaSamplerDataset(IterableDataset):
             self.text = f.read()
 
         self.len_text = len(self.text)
+        self.sampling_strategy = sampling_strategy
 
-    def __iter__(self):
+    def iter_local_sequence(self):
         """
         Randomly samples two sequence from the fasta file which constitute a positive
         sample.
@@ -58,6 +60,47 @@ class FastaSamplerDataset(IterableDataset):
                 x_2 = self.text[i_2 - L_2 : i_2]
 
             yield x_1, x_2
+
+    def iter_subsequence(self):
+        """
+        Randomly sampled a sequence from the fasta file and then samples and then samples a subsequence from that sequence
+        """
+
+        while True:
+            i_1 = torch.randint(0, self.len_text, (1,))
+            L_1 = torch.normal(self.range_mean, self.range_std, (1,)).int()
+            direction = torch.randint(0, 2, (1,))
+            if direction == 0:
+                x_1 = self.text[i_1 : i_1 + L_1]
+            else:
+                x_1 = self.text[i_1 - L_1 : i_1]
+
+            # sample a second sequence from the first sequence
+            i_2 = torch.randint(0, int(L_1), (1,))
+            L_2 = torch.normal(self.range_mean, self.range_std, (1,)).int()
+            # choose the direction which leads to the longest sequence
+            if i_2 + L_2 > L_1:
+                direction = 0
+            else:
+                direction = 1
+            if direction == 0:
+                x_2 = x_1[i_2 : i_2 + L_2]
+            else:
+                x_2 = x_1[i_2 - L_2 : i_2]
+
+            yield x_1, x_2
+
+
+    def __iter__(self):
+        if self.sampling_strategy == "local":
+            return self.iter_local_sequence()
+        elif self.sampling_strategy == "subsequence":
+            return self.iter_subsequence()
+        else:
+            raise ValueError(
+                f"Sampling strategy {self.sampling_strategy} not implemented"
+            )
+
 
 
 def collate_fn(
