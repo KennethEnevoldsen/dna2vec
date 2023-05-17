@@ -54,7 +54,7 @@ class OptimizerConfigSchema(BaseModel):
 class SchedulerConfigSchema(BaseModel):
     max_lr: float = 1e-3
     anneal_strategy: Literal["cos", "linear", "polynomial", "constant"] = "cos"
-    total_steps: Optional[int] =100_000 # derived from training config
+    total_steps: Optional[int] =None # derived from training config
 
 
 
