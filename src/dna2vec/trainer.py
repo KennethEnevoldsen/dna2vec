@@ -137,7 +137,7 @@ class ContrastiveTrainer:
     def save_to_disk(self, path: Optional[str] = None):
         if path is None:
             save_path = self.config.training_config.save_path
-        else
+        else:
             save_path = Path(path)
         save_path.mkdir(parents=True, exist_ok=True)
 

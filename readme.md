@@ -46,7 +46,5 @@ python src/dna2vec/pinecone_store.py --inputpath /home/pholur/dna-2-vec/data/sub
 - [ ] Add more data
     - [ ] Add all of the human genome
 - [ ] Issues
-    - [ ] There might be a memory leak somewhere
 
-- [ ] save model to SSD 5 (or just wandb?)
 - [ ] fix loss to mean loss? shouldn't change with batch size
