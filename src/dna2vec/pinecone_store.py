@@ -9,6 +9,7 @@ import string
 import pinecone
 import torch
 from tqdm import tqdm
+import random
 
 
 
@@ -28,8 +29,9 @@ class EvalModel():
     def encode(self, x):
         with torch.no_grad():
             input_data = self.tokenizer.tokenize(x).to_torch()
-            last_hidden_state = self.model(**input_data)
-            y = self.pooling(last_hidden_state, attention_mask=input_data["attention_mask"])
+            last_hidden_state = self.model(input_ids = input_data["input_ids"].to(self.device), 
+                                           attention_mask = input_data["attention_mask"].to(self.device))
+            y = self.pooling(last_hidden_state, attention_mask=input_data["attention_mask"].to(self.device))
             return y.squeeze().detach().cpu().numpy()
 
         
@@ -60,7 +62,7 @@ class PineconeStore:
         self, metric: str = "cosine", index_name: str = "dna-1-0504"
     ):
         pinecone.init(
-            api_key="ded0a046-d0fe-4f8a-b45c-1d6274ad555e", environment="us-west4-gcp"
+            api_key="ddfd1aa4-0eb0-4ff6-a445-f59dd0e9bbac", environment="asia-southeast1-gcp"
         )
 
         # only create index if it doesn't exist
@@ -130,7 +132,7 @@ class PineconeStore:
         xq = self.model.encode(query).tolist()
 
         # now query
-        xc = self.index.query(xq, top_k=3, include_metadata=True)
+        xc = self.index.query(xq, top_k=5, include_metadata=True)
 
         return xc
 

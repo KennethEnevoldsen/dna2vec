@@ -73,7 +73,7 @@ if __name__ == "__main__":
 
     sequence = Splicer(sequence)
     subsequences = sequence.splice(
-        mode=args.mode, sample_length=[10, 100], number_of_sequences=args.n
+        mode=args.mode, sample_length=[160, 240], number_of_sequences=args.n
     )
 
     with open(os.path.join(data_path, "subsequences_sample.txt"), "w+") as f:
