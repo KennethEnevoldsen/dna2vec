@@ -94,7 +94,7 @@ class PineconeStore:
         with open(file_path, "r", encoding="utf-8") as f:
             batch = []
             for line in f:
-                batch.append(line.strip())
+                batch.append(line.strip().split(" <> "))
                 if len(batch) == batch_size:
                     yield batch
                     batch = []
@@ -115,9 +115,10 @@ class PineconeStore:
             ids = [PineconeStore.generate_random_string() for _ in range(len(batch))]
 
             # create metadata batch - we can add context here
-            metadatas = [{"text": text} for text in batch]
+            metadatas = [{"text": text[0], "position": text[1]} for text in batch]
+            texts = [text[0] for text in batch]
             # create embeddings
-            xc = self.model.encode(batch)
+            xc = self.model.encode(texts)
 
             # create records list for upsert
             records = zip(ids, xc, metadatas)
@@ -127,12 +128,12 @@ class PineconeStore:
         # check number of records in the index
         self.index.describe_index_stats()
 
-    def query(self, query):  # consider batching if slow
+    def query(self, query, top_k=5):  # consider batching if slow
         # create the query vector
         xq = self.model.encode(query).tolist()
 
         # now query
-        xc = self.index.query(xq, top_k=5, include_metadata=True)
+        xc = self.index.query(xq, top_k=top_k, include_metadata=True)
 
         return xc
 
@@ -159,8 +160,8 @@ if __name__ == "__main__":
     if args.reupload == "y":
         pinecone_obj.trigger_pinecone_upsertion(file_path=args.inputpath)
 
-    for _ in tqdm(range(10000)):  # robustness check
-        pinecone_obj.query("OMEGALUL IT WORKS 0_o")
+    # for _ in tqdm(range(10000)):  # robustness check
+    #     pinecone_obj.query("OMEGALUL IT WORKS 0_o")
 
     if args.drop == "y":
         pinecone_obj.drop_table()

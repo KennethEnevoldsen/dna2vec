@@ -12,7 +12,9 @@ from tqdm import tqdm
 parser = argparse.ArgumentParser(description="Path to I/O data")
 parser.add_argument('--datapath', type=str)
 parser.add_argument('--mode', type=str)
-parser.add_argument('--n', type=int)
+parser.add_argument('--ntrain', type=int)
+parser.add_argument('--ntest', type=int)
+
 
 np.random.seed(42)
 
@@ -42,7 +44,7 @@ class Splicer:
                 length = np.random.randint(sample_length[0], sample_length[1])
                 start = np.random.randint(0, len(self.sequence) - length)
                 end = start + length
-                subsequences.append(self.sequence[start:end])
+                subsequences.append([self.sequence[start:end], str(start)])
 
         elif mode == "fixed":
             if type(sample_length) != int:
@@ -54,7 +56,7 @@ class Splicer:
             for _ in tqdm(range(number_of_sequences)):
                 start = np.random.randint(0, len(self.sequence) - sample_length)
                 end = start + sample_length
-                subsequences.append(self.sequence[start:end])
+                subsequences.append([self.sequence[start:end], str(start)])
 
         else:
             raise ValueError("Mode is undefined. Please use: random, fixed.")
@@ -73,10 +75,19 @@ if __name__ == "__main__":
 
     sequence = Splicer(sequence)
     subsequences = sequence.splice(
-        mode=args.mode, sample_length=[160, 240], number_of_sequences=args.n
+        mode=args.mode, sample_length=[50, 240], number_of_sequences=args.ntrain
     )
 
-    with open(os.path.join(data_path, "subsequences_sample.txt"), "w+") as f:
+    with open(os.path.join(data_path, "subsequences_sample_train.txt"), "w+") as f:
         for seq in subsequences:
-            f.write(seq)
+            f.write(" <> ".join(seq))
+            f.write("\n")
+    
+    subsequences = sequence.splice(
+        mode=args.mode, sample_length=[50, 240], number_of_sequences=args.ntest
+    )
+
+    with open(os.path.join(data_path, "subsequences_sample_test.txt"), "w+") as f:
+        for seq in subsequences:
+            f.write(" <> ".join(seq))
             f.write("\n")
