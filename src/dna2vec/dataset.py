@@ -113,8 +113,6 @@ class FastaSamplerDataset(IterableDataset):
 
             x_1 = self.text[i_1 : i_1 + L_1]
             x_2 = x_1[i_2 : i_2 + L_2]
-
-            print(len(x_1), len(x_2))
             yield x_1, x_2
             
 
