@@ -10,13 +10,17 @@ class FastaSamplerDataset(IterableDataset):
         self,
         range_mean: float,
         range_std: float,
+        subsequence_range_mean: float,
+        subsequence_range_std: float,
         fasta_file: Path,
-        sampling_strategy: Literal["local", "subsequence"] = "subsequence",
+        sampling_strategy: Literal["local", "subsequence", "random_subsequence"] = "random_subsequence",
     ):
         super().__init__()
         self.range_mean = range_mean
         self.range_std = range_std
         self.fasta_file = fasta_file
+        self.subsequence_range_mean = subsequence_range_mean
+        self.subsequence_range_std = subsequence_range_std
 
         # load in text file
         with open(self.fasta_file, "r") as f:
@@ -91,11 +95,38 @@ class FastaSamplerDataset(IterableDataset):
             yield x_1, x_2
 
 
+
+    def iter_random_subsequence(self, subsequence_mean_length: int=200, subsequence_std_length: int=20):
+        """
+        differs from iter_subsequence in that the second sequence does not try to capture the longest sequence
+        but rather samples a random subsequence from the first sequence
+        """
+
+        while True:
+            L_1 = torch.normal(self.range_mean, self.range_std, (1,)).int()
+            i_1 = torch.randint(0, int(self.len_text-L_1), (1,))
+
+            # sample lengh of second sequence
+            L_2 = torch.normal(subsequence_mean_length, subsequence_std_length, (1,)).int()
+            # sample the start of the second sequence from the first sequence [0, L_1 - L_2]
+            i_2 = torch.randint(0, int(L_1 - L_2), (1,))
+
+            x_1 = self.text[i_1 : i_1 + L_1]
+            x_2 = x_1[i_2 : i_2 + L_2]
+
+            print(len(x_1), len(x_2))
+            yield x_1, x_2
+            
+
+
+
     def __iter__(self):
         if self.sampling_strategy == "local":
             return self.iter_local_sequence()
         elif self.sampling_strategy == "subsequence":
             return self.iter_subsequence()
+        elif self.sampling_strategy == "random_subsequence":
+            return self.iter_random_subsequence(self.subsequence_range_mean, self.subsequence_range_std)
         else:
             raise ValueError(
                 f"Sampling strategy {self.sampling_strategy} not implemented"
