@@ -88,6 +88,18 @@ class ContrastiveTrainer:
 
             last_hidden_x_1 = self.encoder(**x_1)
             last_hidden_x_2 = self.encoder(**x_2)
+
+            # debug:
+            # calculate the distribution of lengths
+            x1_norms = torch.norm(last_hidden_x_1, dim=2)
+            x2_norms = torch.norm(last_hidden_x_2, dim=2)
+            x1_norms = x1_norms.reshape(-1)
+            x2_norms = x2_norms.reshape(-1)
+            x1_norms = x1_norms.detach().cpu().numpy()
+            x2_norms = x2_norms.detach().cpu().numpy()
+
+
+
             y_1 = self.pooling(last_hidden_x_1, attention_mask=x_1["attention_mask"])
             y_2 = self.pooling(last_hidden_x_2, attention_mask=x_2["attention_mask"])
 
@@ -97,6 +109,8 @@ class ContrastiveTrainer:
             sim = self.similarity(y_1.unsqueeze(1), y_2.unsqueeze(0))
 
             labels = torch.arange(sim.size(0)).long().to(self.device)
+
+
 
             
             loss = self.loss(sim, labels)
@@ -135,7 +149,14 @@ class ContrastiveTrainer:
         
             if step % log_interval == 0:
                 current_lr = self.optimizer.param_groups[0]["lr"]
-                wandb.log({"loss": loss, "step": step, "lr": current_lr, "numerator": numerator, "denominator": denominator, "loss_custom": loss_custom})
+                wandb.log({"loss": loss, 
+                           "step": step, 
+                           "lr": current_lr, 
+                           "numerator": numerator, 
+                           "denominator": denominator, 
+                           "loss_custom": loss_custom,
+                           "x1_norms": x1_norms,
+                           "x2_norms": x2_norms,})
 
             # save the model
             if loss < self.best_loss:
