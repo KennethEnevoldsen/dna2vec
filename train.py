@@ -17,9 +17,9 @@ CONFIG = ConfigSchema(
         batch_size=64,
         device=device,
         log_interval=100,
-        accumulation_steps=32,
+        accumulation_steps=4,
         scheduler_config=SchedulerConfigSchema(
-            max_lr=1e-4,
+            max_lr=0.00001,
         ),
     ),
     dataset_config=DatasetConfigSchema(
