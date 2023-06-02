@@ -10,16 +10,16 @@ from dna2vec.main import main
 import torch
 
 
-device = torch.device("cuda:3")
+device = torch.device("cuda:4")
 CONFIG = ConfigSchema(
     training_config=TrainingConfigSchema(
         max_steps=100_000,
         batch_size=64,
         device=device,
         log_interval=100,
-        accumulation_steps=4,
+        accumulation_steps=32,
         scheduler_config=SchedulerConfigSchema(
-            max_lr=1e-3,
+            max_lr=1e-4,
         ),
     ),
     dataset_config=DatasetConfigSchema(
