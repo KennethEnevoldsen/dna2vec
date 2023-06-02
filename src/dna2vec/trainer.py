@@ -98,7 +98,28 @@ class ContrastiveTrainer:
 
             labels = torch.arange(sim.size(0)).long().to(self.device)
 
+            
             loss = self.loss(sim, labels)
+            def custom_loss(sim, labels):
+                # debugging the loss
+
+                # batch example using a for loop
+                losses = []
+                numerators = []
+                denominators = []
+                for i in labels:
+                    numerator = torch.exp(sim[i][i])
+                    denominator = torch.sum(torch.exp(sim[i]))
+                    pr_example_loss = -torch.log(numerator/denominator)
+                    numerators.append(numerator)
+                    denominators.append(denominator)
+                    losses.append(pr_example_loss)
+
+                return torch.mean(torch.stack(losses)), torch.mean(torch.stack(numerators)), torch.mean(torch.stack(denominators))
+        
+            loss_custom, numerator, denominator = custom_loss(sim, labels)
+
+
 
             loss = loss / self.training_config.accumulation_steps
             loss.backward()
@@ -114,7 +135,7 @@ class ContrastiveTrainer:
         
             if step % log_interval == 0:
                 current_lr = self.optimizer.param_groups[0]["lr"]
-                wandb.log({"loss": loss, "step": step, "lr": current_lr})
+                wandb.log({"loss": loss, "step": step, "lr": current_lr, "numerator": numerator, "denominator": denominator, "loss_custom": loss_custom})
 
             # save the model
             if loss < self.best_loss:
