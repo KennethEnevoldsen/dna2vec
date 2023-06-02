@@ -42,4 +42,3 @@ def test_learned_positional_embedding():
     emb = encoder(x)
     # assert emb.names == ("batch", "sequence", "embedding")
     assert emb.shape == (2, 5, 10)
-

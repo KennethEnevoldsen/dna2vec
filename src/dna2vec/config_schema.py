@@ -69,7 +69,7 @@ class TrainingConfigSchema(BaseModel):
     accumulation_steps: int = 1
     max_grad_norm: float = 1.0
     scheduler: Type[LRScheduler] = OneCycleLR
-    scheduler_config = SchedulerConfigSchema()
+    scheduler_config: SchedulerConfigSchema = SchedulerConfigSchema()
     save_path: Path = project_path / "models"
 
     max_steps: int = 1000
@@ -83,8 +83,11 @@ class TrainingConfigSchema(BaseModel):
 class DatasetConfigSchema(BaseModel):
     dataset: Type[Dataset] = FastaSamplerDataset
     fasta_file: Path = project_path / "tests" / "data" / "NC_000002.12.txt"
-    range_mean: float = 200
-    range_std: float = 20
+    range_mean: float = 1000
+    range_std: float = 100
+    subsequence_range_mean: float = 200
+    subsequence_range_std: float = 20
+    sampling_strategy: str = "random_subsequence"
 
 
 class ConfigSchema(BaseModel):
