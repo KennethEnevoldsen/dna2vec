@@ -28,7 +28,7 @@ dependencies = [
     "sentence-transformers>=2.2.0",
     "umap-learn>=0.1.1",
     "tqdm>=4.62.0",
-    "pinecone-client>2.2.0",
+    "pinecone-client[grpc]>2.2.0",
     "pydantic>=1.8.2",
     "typer>=0.3.2",
     "tokenizers>=0.13.3",

@@ -86,15 +86,15 @@ class ContrastiveTrainer:
                 break
 
 
-            last_hidden_x_1 = self.encoder(**x_1)
-            last_hidden_x_2 = self.encoder(**x_2)
+            last_hidden_x_1 = self.encoder(**x_1) # long sequence
+            last_hidden_x_2 = self.encoder(**x_2) # subsequence
             y_1 = self.pooling(last_hidden_x_1, attention_mask=x_1["attention_mask"])
             y_2 = self.pooling(last_hidden_x_2, attention_mask=x_2["attention_mask"])
 
             # Calculate similarity
             # y_1 # names: [batch, embedding]
             # y_2 # names: [batch, embedding]
-            sim = self.similarity(y_1.unsqueeze(1), y_2.unsqueeze(0))
+            sim = self.similarity(y_1.unsqueeze(1), y_2.unsqueeze(0)) # outer-product
 
             labels = torch.arange(sim.size(0)).long().to(self.device)
 
