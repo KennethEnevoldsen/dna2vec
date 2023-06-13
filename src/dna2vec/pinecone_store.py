@@ -32,7 +32,7 @@ class EvalModel():
             last_hidden_state = self.model(input_ids = input_data["input_ids"].to(self.device), 
                                            attention_mask = input_data["attention_mask"].to(self.device))
             y = self.pooling(last_hidden_state, attention_mask=input_data["attention_mask"].to(self.device))
-            return y.squeeze().detach().cpu().numpy()
+            return torch.nn.functional.normalize(y.squeeze(), dim=0).detach().cpu().numpy()
 
         
 
@@ -55,14 +55,26 @@ class PineconeStore:
                 device = device
             )
         
+        
+        if index_name == "init" or index_name == "dna-1-0504":
+            self.api_key = "ddfd1aa4-0eb0-4ff6-a445-f59dd0e9bbac"
+            self.environment = "asia-southeast1-gcp"
+            
+        elif index_name == "trained":
+            self.api_key = "ef143c9a-6ce1-4d44-8dc4-22faf54bf6b9"
+            self.environment = "us-west1-gcp-free"
+        
         self.initialize_pinecone_upsertion(metric, index_name)
         self.index_name = index_name
 
     def initialize_pinecone_upsertion(
-        self, metric: str = "cosine", index_name: str = "dna-1-0504"
+        self, 
+        metric: str, 
+        index_name: str
     ):
         pinecone.init(
-            api_key="ddfd1aa4-0eb0-4ff6-a445-f59dd0e9bbac", environment="asia-southeast1-gcp"
+            api_key=self.api_key, 
+            environment=self.environment
         )
 
         # only create index if it doesn't exist
@@ -150,18 +162,22 @@ if __name__ == "__main__":
     parser.add_argument('--reupload', help="Should we reupload the data?", type=str, choices=['y','n'])
     parser.add_argument('--drop', help="Should we drop the data?", type=str, choices=['y','n'])
     parser.add_argument('--inputpath', help="Splice input file", type=str)
+    parser.add_argument('--indexname', help="Index name", type=str)
+    
     args = parser.parse_args()
     # fmt: on
 
     random.seed(42)
 
-    pinecone_obj = PineconeStore(device="cuda:4")
+    pinecone_obj = PineconeStore(
+        device="cuda:4", 
+        index_name=args.indexname
+    )
 
-    if args.reupload == "y":
-        pinecone_obj.trigger_pinecone_upsertion(file_path=args.inputpath)
-
-    # for _ in tqdm(range(10000)):  # robustness check
-    #     pinecone_obj.query("OMEGALUL IT WORKS 0_o")
+    # if args.reupload == "y":
+    #     pinecone_obj.trigger_pinecone_upsertion(
+    #         file_path=args.inputpath
+    #     )
 
     if args.drop == "y":
         pinecone_obj.drop_table()
