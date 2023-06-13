@@ -6,10 +6,35 @@ Issues with API timeout on DB creation
 Unstable: https://github.com/pinecone-io/pinecone-python-client/issues
 """
 import string
-
 import pinecone
+import torch
 from tqdm import tqdm
+import random
 
+
+
+class EvalModel():
+    def __init__(self, tokenizer, model, pooling, device):
+        self.tokenizer = tokenizer
+        self.model = model
+        
+        self.pooling = pooling
+        self.pooling.to(device)
+        
+        self.model.to(device)
+        self.device = device
+        
+        self.model.eval()
+    
+    def encode(self, x):
+        with torch.no_grad():
+            input_data = self.tokenizer.tokenize(x).to_torch()
+            last_hidden_state = self.model(input_ids = input_data["input_ids"].to(self.device), 
+                                           attention_mask = input_data["attention_mask"].to(self.device))
+            y = self.pooling(last_hidden_state, attention_mask=input_data["attention_mask"].to(self.device))
+            return torch.nn.functional.normalize(y.squeeze(), dim=0).detach().cpu().numpy()
+
+        
 
 class PineconeStore:
     def __init__(
@@ -17,27 +42,51 @@ class PineconeStore:
         device: str,
         index_name: str = "dna-1-0504",
         metric: str = "cosine",
-        model_version: str = "all-MiniLM-L6-v2",
+        model_params = None,
     ):
-        from sentence_transformers import SentenceTransformer
-
-        self.model = SentenceTransformer(model_version, device=device)
+        if model_params == None:
+            from sentence_transformers import SentenceTransformer
+            self.model = SentenceTransformer("all-MiniLM-L6-v2", device=device)
+        else:
+            self.model = EvalModel(
+                model_params["tokenizer"],
+                model_params["model"],
+                model_params["pooling"],
+                device = device
+            )
+        
+        
+        if index_name == "init" or index_name == "dna-1-0504":
+            self.api_key = "ddfd1aa4-0eb0-4ff6-a445-f59dd0e9bbac"
+            self.environment = "asia-southeast1-gcp"
+            
+        elif index_name == "trained":
+            self.api_key = "ef143c9a-6ce1-4d44-8dc4-22faf54bf6b9"
+            self.environment = "us-west1-gcp-free"
+        
         self.initialize_pinecone_upsertion(metric, index_name)
         self.index_name = index_name
 
     def initialize_pinecone_upsertion(
-        self, metric: str = "cosine", index_name: str = "dna-1-0504"
+        self, 
+        metric: str, 
+        index_name: str
     ):
         pinecone.init(
-            api_key="ded0a046-d0fe-4f8a-b45c-1d6274ad555e", environment="us-west4-gcp"
+            api_key=self.api_key, 
+            environment=self.environment
         )
 
         # only create index if it doesn't exist
         if index_name not in pinecone.list_indexes():
+            try:
+                dimension = self.model.get_sentence_embedding_dimension()
+            except:
+                dimension = 384
             pinecone.create_index(
                 name=index_name,
-                dimension=self.model.get_sentence_embedding_dimension(),
-                metric=metric,
+                dimension=dimension,
+                metric=metric
             )
 
         # now connect to the index
@@ -57,7 +106,7 @@ class PineconeStore:
         with open(file_path, "r", encoding="utf-8") as f:
             batch = []
             for line in f:
-                batch.append(line.strip())
+                batch.append(line.strip().split(" <> "))
                 if len(batch) == batch_size:
                     yield batch
                     batch = []
@@ -78,9 +127,10 @@ class PineconeStore:
             ids = [PineconeStore.generate_random_string() for _ in range(len(batch))]
 
             # create metadata batch - we can add context here
-            metadatas = [{"text": text} for text in batch]
+            metadatas = [{"text": text[0], "position": text[1]} for text in batch]
+            texts = [text[0] for text in batch]
             # create embeddings
-            xc = self.model.encode(batch)
+            xc = self.model.encode(texts)
 
             # create records list for upsert
             records = zip(ids, xc, metadatas)
@@ -90,12 +140,12 @@ class PineconeStore:
         # check number of records in the index
         self.index.describe_index_stats()
 
-    def query(self, query):  # consider batching if slow
+    def query(self, query, top_k=5):  # consider batching if slow
         # create the query vector
         xq = self.model.encode(query).tolist()
 
         # now query
-        xc = self.index.query(xq, top_k=3, include_metadata=True)
+        xc = self.index.query(xq, top_k=top_k, include_metadata=True)
 
         return xc
 
@@ -112,18 +162,22 @@ if __name__ == "__main__":
     parser.add_argument('--reupload', help="Should we reupload the data?", type=str, choices=['y','n'])
     parser.add_argument('--drop', help="Should we drop the data?", type=str, choices=['y','n'])
     parser.add_argument('--inputpath', help="Splice input file", type=str)
+    parser.add_argument('--indexname', help="Index name", type=str)
+    
     args = parser.parse_args()
     # fmt: on
 
     random.seed(42)
 
-    pinecone_obj = PineconeStore(device="cuda:4")
+    pinecone_obj = PineconeStore(
+        device="cuda:4", 
+        index_name=args.indexname
+    )
 
-    if args.reupload == "y":
-        pinecone_obj.trigger_pinecone_upsertion(file_path=args.inputpath)
-
-    for _ in tqdm(range(10000)):  # robustness check
-        pinecone_obj.query("OMEGALUL IT WORKS 0_o")
+    # if args.reupload == "y":
+    #     pinecone_obj.trigger_pinecone_upsertion(
+    #         file_path=args.inputpath
+    #     )
 
     if args.drop == "y":
         pinecone_obj.drop_table()
