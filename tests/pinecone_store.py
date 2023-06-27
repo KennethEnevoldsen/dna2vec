@@ -40,13 +40,12 @@ class PineconeStore:
     def __init__(
         self,
         device: str,
-        index_name: str = "dna-1-0504",
+        index_name: str,
         metric: str = "cosine",
         model_params = None,
     ):
         if model_params == None:
-            from sentence_transformers import SentenceTransformer
-            self.model = SentenceTransformer("all-MiniLM-L6-v2", device=device)
+            raise ValueError("Model params are empty.")
         else:
             self.model = EvalModel(
                 model_params["tokenizer"],
@@ -56,13 +55,20 @@ class PineconeStore:
             )
         
         
-        if index_name == "init" or index_name == "dna-1-0504":
-            self.api_key = "ddfd1aa4-0eb0-4ff6-a445-f59dd0e9bbac"
-            self.environment = "asia-southeast1-gcp"
+        # if index_name == "init" or index_name == "dna-1-0504":
+        #     self.api_key = "ddfd1aa4-0eb0-4ff6-a445-f59dd0e9bbac"
+        #     self.environment = "asia-southeast1-gcp"
             
-        elif index_name == "trained":
-            self.api_key = "ef143c9a-6ce1-4d44-8dc4-22faf54bf6b9"
-            self.environment = "us-west1-gcp-free"
+        # elif index_name == "trained":
+        #     self.api_key = "ef143c9a-6ce1-4d44-8dc4-22faf54bf6b9"
+        #     self.environment = "us-west1-gcp-free"
+        
+        if "config-" in index_name: # premium account
+            self.api_key = "ded0a046-d0fe-4f8a-b45c-1d6274ad555e"
+            self.environment = "us-west4-gcp"
+            
+        else:
+            raise NotImplementedError("Name not identified.")
         
         self.initialize_pinecone_upsertion(metric, index_name)
         self.index_name = index_name
@@ -79,10 +85,13 @@ class PineconeStore:
 
         # only create index if it doesn't exist
         if index_name not in pinecone.list_indexes():
+            print(f"Creating new index, {index_name}")
+            
             try:
                 dimension = self.model.get_sentence_embedding_dimension()
             except:
                 dimension = 384
+                
             pinecone.create_index(
                 name=index_name,
                 dimension=dimension,
@@ -103,10 +112,13 @@ class PineconeStore:
         Yields:
             list(str): list of strings
         """
-        with open(file_path, "r", encoding="utf-8") as f:
+        import pickle
+        
+        with open(file_path, "rb") as f:
+            list_of_objects = pickle.load(f)
             batch = []
-            for line in f:
-                batch.append(line.strip().split(" <> "))
+            for unit in list_of_objects:
+                batch.append(unit)
                 if len(batch) == batch_size:
                     yield batch
                     batch = []
@@ -118,24 +130,26 @@ class PineconeStore:
         letters = string.ascii_lowercase
         return "".join(random.choice(letters) for _ in range(length))
 
-    def trigger_pinecone_upsertion(self, file_path: str, batch_size: int = 64):
+    def trigger_pinecone_upsertion(self, file_paths: list, 
+                                   batch_size: int = 64):
         from tqdm import tqdm
+        
+        for file_path in file_paths:
+            batches = PineconeStore.batched_data_generator(file_path, batch_size)
 
-        batches = PineconeStore.batched_data_generator(file_path, batch_size)
+            for batch in tqdm(batches):
+                ids = [PineconeStore.generate_random_string() for _ in range(len(batch))]
 
-        for batch in tqdm(batches):
-            ids = [PineconeStore.generate_random_string() for _ in range(len(batch))]
+                # create metadata batch - we can add context here
+                metadatas = batch
+                texts = [text["text"] for text in batch]
+                # create embeddings
+                xc = self.model.encode(texts)
 
-            # create metadata batch - we can add context here
-            metadatas = [{"text": text[0], "position": text[1]} for text in batch]
-            texts = [text[0] for text in batch]
-            # create embeddings
-            xc = self.model.encode(texts)
-
-            # create records list for upsert
-            records = zip(ids, xc, metadatas)
-            # upsert to Pinecone
-            self.index.upsert(vectors=records)
+                # create records list for upsert
+                records = zip(ids, xc, metadatas)
+                # upsert to Pinecone
+                self.index.upsert(vectors=records)
 
         # check number of records in the index
         self.index.describe_index_stats()
@@ -151,6 +165,10 @@ class PineconeStore:
 
     def drop_table(self):  # times out for large data!
         pinecone.delete_index(self.index_name)
+
+
+
+
 
 
 if __name__ == "__main__":

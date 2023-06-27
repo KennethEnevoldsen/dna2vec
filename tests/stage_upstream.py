@@ -1,9 +1,3 @@
-"""
-Consider rewriting in generator form.
-It doesn't appear that we need it though.
-Bulk is a list of strings.
-"""
-
 from typing import Any, List, Literal
 import argparse
 import numpy as np
@@ -12,9 +6,15 @@ from tqdm import tqdm
 parser = argparse.ArgumentParser(description="Path to I/O data")
 parser.add_argument('--datapath', type=str)
 parser.add_argument('--mode_train', type=str)
-parser.add_argument('--mode_test', type=str)
+# parser.add_argument('--mode_test', type=str)
+# parser.add_argument('--mode_test', type=str)
+parser.add_argument('--rawfile', type=str)
+parser.add_argument('--unit_length', type=int)
+parser.add_argument('--meta', type=str)
+parser.add_argument('--overlap', type=int)
+parser.add_argument('--topath', type=str)
 parser.add_argument('--ntrain', type=int)
-parser.add_argument('--ntest', type=int)
+# parser.add_argument('--ntest', type=int)
 
 
 np.random.seed(42)
@@ -35,6 +35,7 @@ class Splicer:
         self,
         mode: Literal["random", "fixed", "hard_serialized"] = "random",
         sample_length: Any = None,
+        overlap: Any = None,
         number_of_sequences: int = 5,
     ) -> None:
         subsequences: List = []
@@ -63,7 +64,7 @@ class Splicer:
                 end = start + sample_length
                 subsequences.append([self.sequence[start:end], str(start)])
 
-        elif mode == "hard_serialized":
+        elif mode == "hard_serialized": # default
             if type(sample_length) != int:
                 raise ValueError("Sample length is not an integer")
 
@@ -72,22 +73,22 @@ class Splicer:
             
             start = 0
             sample_count = 0
-            while start < len(self.sequence) and sample_count < 500000:
+            while start < len(self.sequence) and sample_count < 500000: # NASA-esque hard upper limit
                 subsequences.append([
                     self.sequence[start:min(start + sample_length, len(self.sequence))], 
                     str(start)
                     ]
                 )
-                # if sample_count < 2:
-                #     print(subsequences)
-                # else:
-                #     exit()
                 start += sample_length
+                if overlap != None and overlap < sample_length:
+                    start -= overlap
+                else:
+                    print("Overlap too large or not provided. Falling back to hard cutoffs.")
                 sample_count += 1
                 
             
         else:
-            raise ValueError("Mode is undefined. Please use: random, fixed.")
+            raise ValueError("Mode is undefined. Please use: random, fixed, hard_serialized.")
 
         return subsequences
 
@@ -98,24 +99,36 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     data_path = args.datapath
-    with open(os.path.join(data_path, "NC_000002.12.txt"), "r") as f:
+    raw_file = args.rawfile
+    
+    if ".fasta" not in raw_file:
+        raise FileNotFoundError("Fasta file not found error.")
+
+    meta_data = args.meta
+    to_file = "floodfill.txt" if args.topath is None else args.topath
+    
+    with open(os.path.join(data_path, raw_file), "r") as f:
         sequence = f.read()
 
     sequence = Splicer(sequence)
     subsequences = sequence.splice(
-        mode=args.mode_train, sample_length=1000, number_of_sequences=args.ntrain
-    )
-    print(subsequences[0])
-    with open(os.path.join(data_path, "subsequences_sample_train.txt"), "w+") as f:
-        for seq in tqdm(subsequences):
-            f.write(" <> ".join(seq))
-            f.write("\n")
-    
-    subsequences = sequence.splice(
-        mode=args.mode_test, sample_length=[150, 250], number_of_sequences=args.ntest
+        mode=args.mode_train, 
+        sample_length=args.unit_length, 
+        number_of_sequences=args.ntrain,
+        overlap=args.overlap
     )
 
-    with open(os.path.join(data_path, "subsequences_sample_test.txt"), "w+") as f:
-        for seq in subsequences:
-            f.write(" <> ".join(seq))
-            f.write("\n")
+    import pickle
+    global_dictionary = []
+    for seq in tqdm(subsequences):
+        global_dictionary.append({
+            "text": seq[0],
+            "position": seq[1],
+            "metadata": meta_data
+        })
+
+    file = open(os.path.join(data_path, to_file), 'wb')
+    pickle.dump(global_dictionary, file)
+    file.close()
+
+        
