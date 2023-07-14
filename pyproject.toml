@@ -33,6 +33,8 @@ dependencies = [
     "typer>=0.3.2",
     "tokenizers>=0.13.3",
     "wandb>=0.12.1",
+    "biopython>=1.81",
+    "pysam>=0.21.0",
 
 ]
 

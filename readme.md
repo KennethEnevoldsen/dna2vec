@@ -2,6 +2,21 @@
 
 This repository contains code files for DNA-2-Vec. The main code files can be found under `src/dna2vec`, while the data is saved under the `data` directory.
 
+## Installation
+
+```
+git clone {repo url}
+cd {repo}
+pip install -e .
+```
+
+Furthermore, if you wish to simulate reads (used for training and evaluation) you will have to install [ART](https://www.niehs.nih.gov/research/resources/software/biostatistics/art/index.cfm). We do this using: 
+
+```bash
+apt install art-nextgen-simulation-tools
+```
+
+
 ## Running the Splicer
 
 To run the Splicer, use the following command:
