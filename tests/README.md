@@ -24,6 +24,8 @@ For example:
 python stage_upstream.py --datapath data/chromosome_2/ --mode_train hard_serialized --rawfile NC_000002.fasta --unit_length 1000 --meta CH2 --overlap 200 --topath floodfill.pkl --ntrain 500000
 ```
 
+
+
 ### Step 2. Upstream into Pinecone
 Set up [Pinecone](https://app.pinecone.io/organizations/-NUbbjSKn59kR22U_SS6/settings/projects), a cloud-hosted vector store. You will need to subscribe to the **Free > Standard** plan found [here](https://app.pinecone.io/organizations/-NUbbjSKn59kR22U_SS6/settings/billing/plans). But don't worry, you can always delete the store after you are done using it. Simply rerun this step to populate from scratch.
 
@@ -39,8 +41,21 @@ For example:
 python upsert.py --recipes "ch2;ch3;ch2,ch3" --checkpoints "trained-ch2-1000"
 ```
 
-
 ### Step 3a. Naïve Permutation and Accuracy Evaluation
+
+Ensure that Pinecone instances are running and the data is populated. Else go back to Step 2. To run permutation accuracy computations at scale, run `test_cache_permute.py`. Arguments:
+```bash
+python test_cache_permute.py 
+    --recipes               % <data recipe combinations>
+    --checkpoints           % <model checkpoint>
+    --mode                  % <permutation mode>
+```
+The additional argument `mode` specifies the type of permutation that is applied on the sequence.For example:
+```bash
+python test_cache_permute.py --recipes "ch2,ch3" --checkpoints "trained-ch2-1000" --mode "end deplete"
+```
+
+Results corresponding to these evaluations are deposited in `DATA_PATH`. You can visualize the results of these evaluations using the testbench `test_permutes.ipynb`.
 
 ### Step 3b. Manifold Visualization
 
