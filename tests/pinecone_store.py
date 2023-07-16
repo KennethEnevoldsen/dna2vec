@@ -54,15 +54,6 @@ class PineconeStore:
                 device = device
             )
         
-        
-        # if index_name == "init" or index_name == "dna-1-0504":
-        #     self.api_key = "ddfd1aa4-0eb0-4ff6-a445-f59dd0e9bbac"
-        #     self.environment = "asia-southeast1-gcp"
-            
-        # elif index_name == "trained":
-        #     self.api_key = "ef143c9a-6ce1-4d44-8dc4-22faf54bf6b9"
-        #     self.environment = "us-west1-gcp-free"
-        
         if "config-" in index_name: # premium account
             self.api_key = "ded0a046-d0fe-4f8a-b45c-1d6274ad555e"
             self.environment = "us-west4-gcp"
