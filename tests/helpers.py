@@ -33,7 +33,7 @@ def initialize_pinecone(checkpoint_queue, data_queue):
         for data_alias in data_queue:
             config = str("config-" + alias + "-" + data_alias).lower()
             store = PineconeStore(
-                                    device = torch.device("cuda:3"),
+                                    device = torch.device("cuda:0"),
                                     index_name = str("config-" + alias + "-" + data_alias.replace(",","-")).lower(),
                                     metric = "cosine",
                                     model_params = {
