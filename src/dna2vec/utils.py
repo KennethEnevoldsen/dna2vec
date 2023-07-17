@@ -2,7 +2,8 @@ import importlib
 import importlib.util
 import json
 import os
-import shutil
+import subprocess
+from typing import Optional
 import urllib.request
 from pathlib import Path
 
@@ -11,27 +12,32 @@ from tqdm import tqdm
 
 from dna2vec.config_schema import ConfigSchema
 
+from Bio import SeqIO
+from Bio.SeqIO.FastaIO import FastaIterator
+
 CACHE_DIR = Path.home() / ".cache" / "dna2vec"
 
 
-def get_human_reference_genome(force: bool = False) -> Path:
+def download_human_reference_genome(force: bool = False, use_uncertified_ssl: bool = False
+                               ) -> Path:
     """
     Download the human reference genome to the cache directory. If the file already
     exists, it will not be downloaded again unless force is set to True.
 
     Args:
         force: If True, the file will be downloaded even if it already exists.
+        use_uncertified_ssl: If True, use uncertified ssl when downloading the file.
     """
     cache_dir = get_cache_dir()
     cache_dir.mkdir(exist_ok=True, parents=True)
 
     url = "https://ftp.ncbi.nlm.nih.gov/refseq/H_sapiens/annotation/GRCh38_latest/refseq_identifiers/GRCh38_latest_genomic.fna.gz"
-    output = cache_dir / "GRCh38_latest_genomic.fna"
+    output = cache_dir / "GRCh38_latest_genomic.fna.gz"
+    unpacked = cache_dir / "GRCh38_latest_genomic.fna"
 
-    if not output.exists() or force:
-        download_url(url, output)
-        shutil.unpack_archive(str(output), extract_dir=str(cache_dir))
-        os.remove(output)
+    if not unpacked.exists() or force:
+        download_url(url, output, use_uncertified_ssl=use_uncertified_ssl)
+        subprocess.run(["gzip", "-d", str(output)], check=True)
 
     return cache_dir / "GRCh38_latest_genomic.fna"
 
@@ -43,7 +49,12 @@ class DownloadProgressBar(tqdm):
         self.update(b * bsize - self.n)
 
 
-def download_url(url, output_path):
+def download_url(url, output_path, use_uncertified_ssl: bool = False):
+    if use_uncertified_ssl:
+        import ssl
+
+        ssl._create_default_https_context = ssl._create_unverified_context
+
     with DownloadProgressBar(
         unit="B", unit_scale=True, miniters=1, desc=url.split("/")[-1]
     ) as t:
@@ -105,3 +116,21 @@ def cfg_to_wandb_dict(cfg: BaseModel) -> dict:
                 yield key, value
 
     return dict(_cfg_to_wandb_dict(cfg_dict))
+
+
+def load_human_reference_genome(path: Optional[Path]= None)-> FastaIterator:
+    """
+    Load the human reference genome from the given path. If no path is given, the
+
+    Args:
+        path: Path to the human reference genome. If None, the genome will be
+            downloaded to the cache directory and loaded from there.
+
+    Returns:
+        An iterator of sequence records.
+    """
+    if path is None:
+        path = download_human_reference_genome()
+    
+    return SeqIO.parse(path, "fasta")
+
