@@ -1,5 +1,4 @@
 from pathlib import Path
-from re import S
 from typing import List
 
 import pytest
@@ -99,7 +98,7 @@ def test_map_reads_to_reference(reads: List[AlignedSegment]):
         assert isinstance(m_read, ReadAndReference)
         assert m_read.is_mapped(), "all reads should be mapped"
         read, ref = m_read.get_pair_as_string()
-        is_approximately_the_same(read, ref)
+        is_approximately_the_same(read, ref)  # type: ignore
 
 
 def test_simulate_reads():
