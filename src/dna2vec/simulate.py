@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import List, Literal, Optional, Tuple, Union
 
 import pysam
-from Bio.Seq import Seq
 from Bio.SeqIO.FastaIO import FastaIterator
 from pysam.libcalignedsegment import AlignedSegment
 
@@ -41,7 +40,7 @@ class ReadAndReference:
     def is_mapped(self) -> bool:
         return self.reference is not None
 
-    def get_pair_as_string(self) -> Tuple[str, str]:
+    def get_pair_as_string(self) -> Tuple[str, Union[str, None]]:
         """
         Get the pair as a tuple of strings.
         """
