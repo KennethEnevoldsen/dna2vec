@@ -4,9 +4,8 @@ It doesn't appear that we need it though.
 Bulk is a list of strings.
 """
 
-import argparse
 from typing import Any, List, Literal
-
+import argparse
 import numpy as np
 from tqdm import tqdm
 
