@@ -3,23 +3,23 @@ import importlib.util
 import json
 import os
 import subprocess
-from typing import Optional
 import urllib.request
 from pathlib import Path
+from typing import Optional
 
+from Bio import SeqIO
+from Bio.SeqIO.FastaIO import FastaIterator
 from pydantic import BaseModel
 from tqdm import tqdm
 
 from dna2vec.config_schema import ConfigSchema
 
-from Bio import SeqIO
-from Bio.SeqIO.FastaIO import FastaIterator
-
 CACHE_DIR = Path.home() / ".cache" / "dna2vec"
 
 
-def download_human_reference_genome(force: bool = False, use_uncertified_ssl: bool = False
-                               ) -> Path:
+def download_human_reference_genome(
+    force: bool = False, use_uncertified_ssl: bool = False
+) -> Path:
     """
     Download the human reference genome to the cache directory. If the file already
     exists, it will not be downloaded again unless force is set to True.
@@ -118,7 +118,7 @@ def cfg_to_wandb_dict(cfg: BaseModel) -> dict:
     return dict(_cfg_to_wandb_dict(cfg_dict))
 
 
-def load_human_reference_genome(path: Optional[Path]= None)-> FastaIterator:
+def load_human_reference_genome(path: Optional[Path] = None) -> FastaIterator:
     """
     Load the human reference genome from the given path. If no path is given, the
 
@@ -131,6 +131,5 @@ def load_human_reference_genome(path: Optional[Path]= None)-> FastaIterator:
     """
     if path is None:
         path = download_human_reference_genome()
-    
-    return SeqIO.parse(path, "fasta")
 
+    return SeqIO.parse(path, "fasta")

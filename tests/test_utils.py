@@ -1,9 +1,15 @@
 from pathlib import Path
 
-from dna2vec.utils import cfg_to_wandb_dict, get_config_from_path, download_human_reference_genome, load_human_reference_genome
-
-from Bio.SeqRecord import SeqRecord
 from Bio.SeqIO.FastaIO import FastaIterator
+from Bio.SeqRecord import SeqRecord
+
+from dna2vec.utils import (
+    cfg_to_wandb_dict,
+    download_human_reference_genome,
+    get_config_from_path,
+    load_human_reference_genome,
+)
+
 
 def test_cfg_to_wandb_dict():
     cfg = get_config_from_path(
@@ -17,6 +23,7 @@ def test_cfg_to_wandb_dict():
     print(wandb_dict)
     json.dumps(wandb_dict)
 
+
 def test_get_human_reference_genome():
     path = download_human_reference_genome(use_uncertified_ssl=True)
     assert isinstance(path, Path)
@@ -24,6 +31,7 @@ def test_get_human_reference_genome():
     assert path.is_file()
     assert path.suffix == ".fna"
     assert path.name == "GRCh38_latest_genomic.fna"
+
 
 def test_load_human_reference_genome():
     ref = load_human_reference_genome()
