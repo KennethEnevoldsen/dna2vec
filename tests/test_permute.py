@@ -56,7 +56,6 @@ def edit(query, edit_mode, generalize):
 def permute(store, query, index, top_k, metadata, edit_mode, generalize):
     
     train_flag = np.zeros((1,len(query)))
-    
     start = 0
     for _ in range(len(query) // generalize):
         
@@ -76,6 +75,95 @@ def permute(store, query, index, top_k, metadata, edit_mode, generalize):
 
 
 
+def identify_random_subsequence(query, length):
+    if length > len(query):
+        return query  # Return None if the requested length is longer than the query
+    start_index = random.randint(0, len(query) - length)  # Generate a random starting index within the valid range
+    end_index = start_index + length  # Calculate the end index
+    return start_index, query[start_index:end_index]
+
+
+from alignment_metrics import calculate_smith_waterman_distance
+from collections import defaultdict
+
+
+
+def bwamem_align(all_candidate_strings, trained_positions, metadata_set, substring):
+    '''
+    Currently implemented sequentially
+    '''
+    total_time = 0
+    refined_results = defaultdict(list)
+    
+    for long_string, train_pos, metadata in zip(
+        all_candidate_strings, trained_positions, metadata_set):
+        
+        returned_object = calculate_smith_waterman_distance(long_string, substring)
+        total_time += returned_object["elapsed time"]
+
+        for starting_sub_index in returned_object["begins"]:
+            refined_results[returned_object["distance"]].append(
+                (starting_sub_index, train_pos, metadata)
+            )
+    
+    try:
+        smallest_key = min(refined_results.keys())
+    except ValueError:
+        return [], [], [], 100
+    smallest_values = refined_results[smallest_key]
+    
+    identified_sub_indices = []
+    identified_indices = []
+    metadata_indices = []
+    
+    for term in smallest_values:
+        identified_sub_indices.append(term[0])
+        identified_indices.append(term[1])
+        metadata_indices.append(term[2])      
+          
+    return identified_sub_indices, identified_indices, metadata_indices, total_time
+        
+
+
+def custom_random_sub(store, query, index, top_k, metadata, edit_mode, generalize):
+    train_flag = np.zeros((1,len(query)))
+    finer_flag = np.zeros_like(train_flag)
+    timer_flag = np.zeros_like(train_flag)
+    start = 0
+
+    for k in tqdm(range(1, len(query) // generalize)):
+        
+        sub_index, substring = identify_random_subsequence(
+            query, min(generalize*k, len(query)))
+        
+        returned = store.query([substring], top_k=top_k)["matches"]
+
+        trained_positions = [sample["metadata"]["position"] for sample in returned]
+        metadata_set = [sample["metadata"]["metadata"] for sample in returned]
+        
+        if (metadata,index) in zip(metadata_set, trained_positions):
+            train_flag[0,start:start + generalize] = 1
+        else:
+            train_flag[0,start:start + generalize] = 0
+        
+        all_candidate_strings = [sample["metadata"]["text"] for sample in returned]
+        
+
+        identified_sub_indices, identified_indices, metadata_indices, timer = bwamem_align(
+                                                                all_candidate_strings, 
+                                                                trained_positions, 
+                                                                metadata_set,
+                                                                substring)
+        if (sub_index, index, metadata) in zip(
+            identified_sub_indices, identified_indices, metadata_indices):
+            finer_flag[0,start:start + generalize] = 1
+        else:
+            finer_flag[0,start:start + generalize] = 0
+        timer_flag[0, start:start + generalize] = timer
+        start += generalize
+      
+    return train_flag, finer_flag, timer_flag
+
 
 def main(paths:list,
          store: PineconeStore = None,
@@ -83,26 +171,49 @@ def main(paths:list,
          test_k: int = 200,
          top_k: int = 50,
          generalize: int = 5,
-         edit_mode: Literal["random deplete", "end deplete", "swap"] = "end deplete"
+         edit_mode: Literal["random deplete", "end deplete", "swap", "random_sub"] = "random_sub"
 ):
+    
     per_samples = test_k // len(paths)
     test_lines = []
-    print(paths)
+    
     for path in paths:
         test_lines.extend(pick_random_lines(path, per_samples))
+    
     train_flags = np.zeros((test_k, len(test_lines[0]["text"])))   
-     
+    finer_flags = np.zeros_like(train_flags)
+    timer_flags = np.zeros_like(train_flags)
+    
     for i,line in tqdm(enumerate(test_lines)):
         
         query = line["text"]
         index = line["position"]
         metadata = line["metadata"]
         
-        train_flag = permute(store, query, index, top_k,  metadata, edit_mode, generalize)
+        if edit_mode == "random_sub":
+            train_flag, finer_flag, timer = custom_random_sub(store, 
+                                                       query, 
+                                                       index, 
+                                                       top_k,  
+                                                       metadata, 
+                                                       edit_mode, 
+                                                       generalize)
+            finer_flags[i,:] = finer_flag
+            timer_flags[i,:] = timer
+            
+        else:
+            train_flag = permute(store, 
+                                query, 
+                                index, 
+                                top_k,  
+                                metadata, 
+                                edit_mode, 
+                                generalize)
+            
         train_flags[i,:] = train_flag
         
-    np.savez_compressed(f"test_cache/permute/refactored_permute_\
-{config}_{edit_mode}_{test_k}_{top_k}_{generalize}.npz", train = train_flags)
+    np.savez_compressed(f"test_cache/permute/run_\
+{config}_{edit_mode}_{test_k}_{top_k}_{generalize}.npz", train = train_flags, finer = finer_flags, timer = timer_flags)
         
 
 
@@ -110,7 +221,6 @@ def main(paths:list,
 if __name__ == "__main__":
 
     args = parser.parse_args()
-    print(args)
     
     data_queue = args.recipes.split(";")
     checkpoint_queue = args.checkpoints.split(";")
@@ -124,6 +234,5 @@ if __name__ == "__main__":
             else:
                 list_of_data_sources.append(source)
                 
-        main(list_of_data_sources, store, config, top_k=5, edit_mode=args.mode, test_k = 500, generalize=20)
-        main(list_of_data_sources, store, config, top_k=50, edit_mode=args.mode, test_k = 500, generalize=20)
-    pass
+        main(list_of_data_sources, store, config, top_k=5, edit_mode=args.mode, test_k = 1000, generalize=10)
+        main(list_of_data_sources, store, config, top_k=50, edit_mode=args.mode, test_k = 1000, generalize=10)
