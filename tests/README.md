@@ -52,12 +52,13 @@ python test_permute.py
 ```
 The additional argument `mode` specifies the type of permutation that is applied on the sequence.For example:
 ```bash
-python test_permute.py --recipes "ch2,ch3" --checkpoints "trained-ch2-1000" --mode "end deplete"
+python test_permute.py --recipes "ch2,ch3" --checkpoints "trained-ch2-1000" --mode "random_sub"
 ```
 
 Results corresponding to these evaluations are deposited in `DATA_PATH`. You can visualize the results of these evaluations using the testbench `test_permutes.ipynb`.
 
 ### Step 3b. Manifold Visualization
+
 
 ### Step 4. Ablation Studies
 
