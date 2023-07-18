@@ -38,10 +38,6 @@ for baseline in checkpoints:
 
 
 
-
-
-
-
 def encode(sequences: list):
     import numpy as np
     train_mat = np.zeros((len(sequences), 384))

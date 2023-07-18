@@ -108,8 +108,10 @@ def bwamem_align(all_candidate_strings, trained_positions, metadata_set, substri
     
     try:
         smallest_key = min(refined_results.keys())
+        
     except ValueError:
-        return [], [], [], 100
+        return [], [], [], total_time
+    
     smallest_values = refined_results[smallest_key]
     
     identified_sub_indices = []
@@ -125,14 +127,19 @@ def bwamem_align(all_candidate_strings, trained_positions, metadata_set, substri
         
 
 
-def custom_random_sub(store, query, index, top_k, metadata, edit_mode, generalize):
+
+import time
+def custom_random_sub(store, query, index, top_k, metadata, generalize):
     train_flag = np.zeros((1,len(query)))
     finer_flag = np.zeros_like(train_flag)
     timer_flag = np.zeros_like(train_flag)
+    total_timer_flag = np.zeros_like(train_flag)
     start = 0
 
     for k in tqdm(range(1, len(query) // generalize)):
         
+        beginning_time = time.time()
+
         sub_index, substring = identify_random_subsequence(
             query, min(generalize*k, len(query)))
         
@@ -148,21 +155,26 @@ def custom_random_sub(store, query, index, top_k, metadata, edit_mode, generaliz
         
         all_candidate_strings = [sample["metadata"]["text"] for sample in returned]
         
-
         identified_sub_indices, identified_indices, metadata_indices, timer = bwamem_align(
-                                                                all_candidate_strings, 
-                                                                trained_positions, 
-                                                                metadata_set,
-                                                                substring)
+                                                                                            all_candidate_strings, 
+                                                                                            trained_positions, 
+                                                                                            metadata_set,
+                                                                                            substring)
+        
+        # print((sub_index, index, metadata), list(zip(
+        #     identified_sub_indices, identified_indices, metadata_indices)))
+        # exit()
+        
         if (sub_index, index, metadata) in zip(
             identified_sub_indices, identified_indices, metadata_indices):
             finer_flag[0,start:start + generalize] = 1
         else:
             finer_flag[0,start:start + generalize] = 0
         timer_flag[0, start:start + generalize] = timer
+        total_timer_flag[0, start:start + generalize] = time.time() - beginning_time
         start += generalize
       
-    return train_flag, finer_flag, timer_flag
+    return train_flag, finer_flag, timer_flag, total_timer_flag
 
 
 def main(paths:list,
@@ -183,6 +195,7 @@ def main(paths:list,
     train_flags = np.zeros((test_k, len(test_lines[0]["text"])))   
     finer_flags = np.zeros_like(train_flags)
     timer_flags = np.zeros_like(train_flags)
+    total_timer_flags = np.zeros_like(train_flags)
     
     for i,line in tqdm(enumerate(test_lines)):
         
@@ -191,15 +204,15 @@ def main(paths:list,
         metadata = line["metadata"]
         
         if edit_mode == "random_sub":
-            train_flag, finer_flag, timer = custom_random_sub(store, 
+            train_flag, finer_flag, timer, total_timer = custom_random_sub(store, 
                                                        query, 
                                                        index, 
                                                        top_k,  
-                                                       metadata, 
-                                                       edit_mode, 
+                                                       metadata,
                                                        generalize)
             finer_flags[i,:] = finer_flag
             timer_flags[i,:] = timer
+            total_timer_flags[i,:] = total_timer
             
         else:
             train_flag = permute(store, 
@@ -213,7 +226,7 @@ def main(paths:list,
         train_flags[i,:] = train_flag
         
     np.savez_compressed(f"test_cache/permute/run_\
-{config}_{edit_mode}_{test_k}_{top_k}_{generalize}.npz", train = train_flags, finer = finer_flags, timer = timer_flags)
+{config}_{edit_mode}_{test_k}_{top_k}_{generalize}.npz", train = train_flags, finer = finer_flags, timer = timer_flags, total_timer = total_timer_flags)
         
 
 
@@ -234,5 +247,5 @@ if __name__ == "__main__":
             else:
                 list_of_data_sources.append(source)
                 
-        main(list_of_data_sources, store, config, top_k=5, edit_mode=args.mode, test_k = 1000, generalize=10)
-        main(list_of_data_sources, store, config, top_k=50, edit_mode=args.mode, test_k = 1000, generalize=10)
+        main(list_of_data_sources, store, config, top_k=5, edit_mode=args.mode, test_k = 500, generalize=25)
+        # main(list_of_data_sources, store, config, top_k=50, edit_mode=args.mode, test_k = 1000, generalize=25)
