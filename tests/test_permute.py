@@ -11,7 +11,7 @@ from helpers import pick_random_lines, initialize_pinecone, data_recipes, checkp
 import numpy as np
 from typing import Literal
 import random
-
+from helpers import bwamem_align
 
 parser = argparse.ArgumentParser(description="Permute evaluate")
 parser.add_argument('--recipes', type=str)
@@ -81,50 +81,6 @@ def identify_random_subsequence(query, length):
     start_index = random.randint(0, len(query) - length)  # Generate a random starting index within the valid range
     end_index = start_index + length  # Calculate the end index
     return start_index, query[start_index:end_index]
-
-
-from alignment_metrics import calculate_smith_waterman_distance
-from collections import defaultdict
-
-
-
-def bwamem_align(all_candidate_strings, trained_positions, metadata_set, substring):
-    '''
-    Currently implemented sequentially
-    '''
-    total_time = 0
-    refined_results = defaultdict(list)
-    
-    for long_string, train_pos, metadata in zip(
-        all_candidate_strings, trained_positions, metadata_set):
-        
-        returned_object = calculate_smith_waterman_distance(long_string, substring)
-        total_time += returned_object["elapsed time"]
-
-        for starting_sub_index in returned_object["begins"]:
-            refined_results[returned_object["distance"]].append(
-                (starting_sub_index, train_pos, metadata)
-            )
-    
-    try:
-        smallest_key = min(refined_results.keys())
-        
-    except ValueError:
-        return [], [], [], total_time
-    
-    smallest_values = refined_results[smallest_key]
-    
-    identified_sub_indices = []
-    identified_indices = []
-    metadata_indices = []
-    
-    for term in smallest_values:
-        identified_sub_indices.append(term[0])
-        identified_indices.append(term[1])
-        metadata_indices.append(term[2])      
-          
-    return identified_sub_indices, identified_indices, metadata_indices, total_time
-        
 
 
 

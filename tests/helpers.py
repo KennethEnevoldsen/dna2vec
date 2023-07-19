@@ -1,9 +1,10 @@
 import random
 import yaml
 
-
-
 from pinecone_store import PineconeStore
+
+from alignment_metrics import calculate_smith_waterman_distance
+from collections import defaultdict
 
 import sys
 sys.path.append("../src/")
@@ -15,6 +16,9 @@ with open("configs/data_recipes.yaml", 'r') as stream:
 
 with open("configs/model_checkpoints.yaml", 'r') as stream:
     checkpoints = yaml.safe_load(stream)
+
+with open("configs/raw.yaml", 'r') as stream:
+    raw_fasta_files = yaml.safe_load(stream)
 
 
 def initialize_pinecone(checkpoint_queue, data_queue):
@@ -181,3 +185,42 @@ def pick_from_chromosome3(path, samples, per_window = 1000):
             random_lines.append((sample_subsequence(full_sequence), str(random_index)))
             
     return random_lines
+
+
+from collections import defaultdict
+def bwamem_align(all_candidate_strings, trained_positions, metadata_set, substring):
+    '''
+    Currently implemented sequentially
+    '''
+    total_time = 0
+    refined_results = defaultdict(list)
+    
+    for long_string, train_pos, metadata in zip(
+        all_candidate_strings, trained_positions, metadata_set):
+        
+        returned_object = calculate_smith_waterman_distance(long_string, substring)
+        total_time += returned_object["elapsed time"]
+
+        for starting_sub_index in returned_object["begins"]:
+            refined_results[returned_object["distance"]].append(
+                (starting_sub_index, train_pos, metadata)
+            )
+    
+    try:
+        smallest_key = min(refined_results.keys())
+        
+    except ValueError:
+        return [], [], [], total_time
+    
+    smallest_values = refined_results[smallest_key]
+    
+    identified_sub_indices = []
+    identified_indices = []
+    metadata_indices = []
+    
+    for term in smallest_values:
+        identified_sub_indices.append(term[0])
+        identified_indices.append(term[1])
+        metadata_indices.append(term[2])      
+          
+    return identified_sub_indices, identified_indices, metadata_indices, total_time

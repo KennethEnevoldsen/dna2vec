@@ -116,25 +116,22 @@ def load_simulated_reads_from_disk(
     """
     logging.info(f"Reading simulated reads from {simulated_path}")
 
-    fastq = simulated_path.with_suffix(".fq")
     sam = simulated_path.with_suffix(".sam")
 
     # load using pysam
     aligned_segments = pysam.AlignmentFile(str(sam))
-
     return list(aligned_segments)
 
 
 def map_reads_to_reference(
     reads: List[AlignedSegment],
-    reference: Optional[FastaIterator] = None,
-):
+    reference: Optional[Path] = None,
+) -> List[ReadAndReference]:
     """
     Map a read to a reference genome.
     """
-    if reference is None:
-        reference = load_human_reference_genome()
-
+    reference = load_human_reference_genome(reference)
+    
     id2read = defaultdict(list)
     unmapped_reads = []
     for read in reads:
@@ -194,6 +191,7 @@ def simulate_mapped_reads(
 
     mapped_reads = map_reads_to_reference(
         reads=load_simulated_reads_from_disk(simulated_reads),
+        reference=reference_genome
     )
 
     return mapped_reads
