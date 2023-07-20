@@ -19,7 +19,7 @@ class SinusoidalPositionalEncoding(nn.Module):
     def __init__(
         self,
         d_model: int,
-        max_len: int = 512,
+        max_len: int = 1024,
     ):
         super().__init__()
         position = torch.arange(max_len).unsqueeze(1)
@@ -74,7 +74,7 @@ class Encoder(nn.Module):
         dropout: float = 0.1,
         activation: Literal["relu", "gelu"] = "gelu",
         pos_embedding: Type[nn.Module] = SinusoidalPositionalEncoding,
-        max_position_embeddings: int = 512,
+        max_position_embeddings: int = 1024,
     ):
         """
         Default values taken from miniLM v6
