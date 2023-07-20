@@ -2,20 +2,19 @@
 Base configurations
 """
 
+from functools import partial
 from pathlib import Path
 from typing import Literal, Optional, Type
 
 import torch
 from pydantic import BaseModel
 from torch import nn
+from torch.optim.lr_scheduler import LRScheduler, OneCycleLR
 from torch.utils.data import Dataset
 
 from dna2vec.dataset import FastaSamplerDataset
 from dna2vec.model import AveragePooler, SinusoidalPositionalEncoding
 from dna2vec.similarity import SimilarityWithTemperature
-
-from torch.optim.lr_scheduler import OneCycleLR, LRScheduler
-from functools import partial
 
 scheduler = partial(OneCycleLR, 
                        max_lr = 1e-4, # Upper learning rate boundaries in the cycle for each parameter group
@@ -37,7 +36,7 @@ class ModelConfigSchema(BaseModel):
     activation: Literal["relu", "gelu"] = "gelu"
     pos_embedding: Type[nn.Module] = SinusoidalPositionalEncoding
     pooling: nn.Module = AveragePooler()
-    max_position_embeddings: int = 512
+    max_position_embeddings: int = 1024
     tokenizer_path: Path = tokenizer_path
     model_path: Optional[Path] = None # where to load the model from
 
@@ -80,7 +79,21 @@ class TrainingConfigSchema(BaseModel):
         arbitrary_types_allowed = True
 
 
-class DatasetConfigSchema(BaseModel):
+class BaseDatasetConfigSchema(BaseModel):
+    dataset: Type[Dataset]
+    fasta_file: Path
+
+
+class DatasetConfigSchemaUniformSampling(BaseDatasetConfigSchema):
+    fasta_file: list
+    range_min = 1000
+    range_max = 2000
+    subsequence_range_min = 100
+    subsequence_range_max = 500
+    sampling_strategy: str = "random_subsequence"
+
+
+class DatasetConfigSchema(BaseDatasetConfigSchema):
     dataset: Type[Dataset] = FastaSamplerDataset
     fasta_file: Path = project_path / "tests" / "data" / "NC_000002.12.txt"
     range_mean: float = 1000
@@ -93,4 +106,6 @@ class DatasetConfigSchema(BaseModel):
 class ConfigSchema(BaseModel):
     model_config: ModelConfigSchema = ModelConfigSchema()
     training_config: TrainingConfigSchema = TrainingConfigSchema()
-    dataset_config: DatasetConfigSchema = DatasetConfigSchema()
+    dataset_config: BaseDatasetConfigSchema = DatasetConfigSchema()
+
+
