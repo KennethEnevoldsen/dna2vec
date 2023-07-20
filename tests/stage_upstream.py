@@ -28,6 +28,10 @@ class Splicer:
         
         if len(sequence) <= limit:
             raise ValueError("Sequence is of limited length.")
+        
+        if ">" == sequence[0]: # FASTA File escape the first line
+            _, sequence = sequence.split('\n', 1)
+            
         sequence = sequence.replace("\n", "")  # incase newline characters exist
         self.sequence = sequence
 

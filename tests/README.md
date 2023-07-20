@@ -58,7 +58,12 @@ python test_permute.py --recipes "ch2,ch3" --checkpoints "trained-ch2-1000" --mo
 Results corresponding to these evaluations are deposited in `DATA_PATH`. You can visualize the results of these evaluations using the testbench `test_permutes.ipynb`.
 
 ### Step 3b. Manifold Visualization
+See `test_clustering.py` and `test_clustering.ipynb`.
 
 
-### Step 4. Ablation Studies
+### Step 4. Accuracy Computation
+```bash
+python test_accuracy.py --recipe "ch2" --checkpoints "trained-ch2-1000" --test 1000 --topk 20 --system "MSv3"
+```
+
 

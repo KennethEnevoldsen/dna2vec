@@ -1,4 +1,5 @@
 tokenizer: "/home/pholur/dna2vec/src/model/tokenizers/dna_tokenizer_10k.json"
 initialized-with-one-step: "/mnt/SSD5/pholur/checkpoints/checkpoint_initalialized.pt"
-trained-ch2-1000: "/mnt/SSD5/pholur/checkpoints/checkpoint_smooth-rock-29.pt"
+# trained-ch2-1000: "/mnt/SSD5/pholur/checkpoints/checkpoint_smooth-rock-29.pt"
+trained-ch2-1000: "/mnt/SSD5/pholur/checkpoints/checkpoint_amber-elevator-53.pt"
 
