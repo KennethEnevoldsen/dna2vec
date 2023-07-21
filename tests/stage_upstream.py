@@ -6,19 +6,14 @@ from tqdm import tqdm
 parser = argparse.ArgumentParser(description="Path to I/O data")
 parser.add_argument('--datapath', type=str)
 parser.add_argument('--mode_train', type=str)
-# parser.add_argument('--mode_test', type=str)
-# parser.add_argument('--mode_test', type=str)
 parser.add_argument('--rawfile', type=str)
 parser.add_argument('--unit_length', type=int)
 parser.add_argument('--meta', type=str)
 parser.add_argument('--overlap', type=int)
 parser.add_argument('--topath', type=str)
 parser.add_argument('--ntrain', type=int)
-# parser.add_argument('--ntest', type=int)
-
 
 np.random.seed(42)
-
 
 class Splicer:
     def __init__(self, 
