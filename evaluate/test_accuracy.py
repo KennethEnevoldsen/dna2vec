@@ -6,6 +6,7 @@ from pathlib import Path
 from datetime import datetime
 import logging
 import random
+from itertools import product
 
 from dna2vec.config_schema import DatasetConfigSchemaUniformSampling
 from dna2vec.simulate import simulate_mapped_reads
@@ -20,7 +21,7 @@ grid = {
     "insertion_rate": [0.00009, 0.0009, 0.009],
     "deletion_rate" : [0.00011, 0.0011, 0.011],
     "qq": [(20,40), (40,60), (60,80)],
-    "topk": [5, 50]
+    "topk": [5, 50, 200]
 }
 
 
@@ -85,36 +86,35 @@ if __name__ == "__main__":
         
     for (store, _, _) in initialize_pinecone(checkpoint_queue, data_queue):
         
-        for read_length in grid["read_length"]:
-            for insertion_rate in grid["insertion_rate"]:
-                for deletion_rate in grid["deletion_rate"]:
-                    for quality in grid["qq"]:
-                        for topk in grid["topk"]:
-                            perf_read = 0
-                            perf_true = 0
-                            count = 0
-                            
-                            mapped_reads = simulate_mapped_reads(
-                                n_reads_pr_amplicon=args.test,
-                                read_length=read_length,
-                                insertion_rate=insertion_rate,
-                                deletion_rate=deletion_rate,
-                                reference_genome=fasta_file_path,
-                                sequencing_system=args.system,
-                                quality = quality
-                            )
-                                                        
-                            for sample in tqdm(mapped_reads):
-                                query = sample.read.query_sequence
-                                beginning = sample.read.reference_start
-                                matches, timer = evaluate(store, query, topk)
-                                if beginning in matches:
-                                    perf_read += 1
-                                count += 1
-                            
-                            
-                            f.write(f"{str(quality).replace(',',';')},{read_length},{insertion_rate},{deletion_rate},{topk},{perf_read/count}\n")
-                            f.flush()
+        for read_length, insertion_rate, deletion_rate, quality, topk in \
+            product(grid["read_length"], grid["insertion_rate"], grid["deletion_rate"], grid["qq"], grid["topk"]):
+
+            perf_read = 0
+            perf_true = 0
+            count = 0
+            
+            mapped_reads = simulate_mapped_reads(
+                n_reads_pr_amplicon=args.test,
+                read_length=read_length,
+                insertion_rate=insertion_rate,
+                deletion_rate=deletion_rate,
+                reference_genome=fasta_file_path,
+                sequencing_system=args.system,
+                quality = quality
+            )
+                                        
+            for sample in tqdm(mapped_reads):
+                query = sample.read.query_sequence
+                beginning = sample.read.reference_start
+                matches, timer = evaluate(store, query, topk)
+                if beginning in matches:
+                    perf_read += 1
+                else:
+                    logging.info(f"############# Error: \nQuery: {query}\nStart: {beginning}\nMatches: {matches}\n {str(quality).replace(',',';')},{read_length},{insertion_rate},{deletion_rate},{topk},{perf_read/count} \n #############")
+                count += 1
+            
+            f.write(f"{str(quality).replace(',',';')},{read_length},{insertion_rate},{deletion_rate},{topk},{perf_read/count}\n")
+            f.flush()
                         
     f.close()
                         
