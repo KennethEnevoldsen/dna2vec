@@ -245,7 +245,7 @@ def bwamem_align_parallel(all_candidate_strings: list[str],
                           trained_positions: list[str], 
                           metadata_set: list[str], 
                           substring: str, 
-                          max_workers: int=10
+                          max_workers: int=20
 ):
     
     total_time = time.time()

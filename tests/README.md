@@ -63,8 +63,9 @@ See `test_clustering.py` and `test_clustering.ipynb`.
 
 
 ### Step 4. Accuracy Computation
+Modify the parameter grid in `test_accuracy.py` and run the following:
 ```bash
-python test_accuracy.py --recipe "ch2" --checkpoints "trained-ch2-1000" --test 1000 --topk 20 --system "MSv3"
+python test_accuracy.py --recipe "ch2" --checkpoints "trained-ch2-1000" --test 10000 --system "MSv3" 
 ```
 
 
