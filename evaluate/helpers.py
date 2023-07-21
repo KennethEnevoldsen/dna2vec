@@ -6,8 +6,8 @@ from pinecone_store import PineconeStore
 from alignment_metrics import calculate_smith_waterman_distance
 from collections import defaultdict
 
-import sys
-sys.path.append("../src/")
+# import sys
+# sys.path.append("../src/")
 from dna2vec.model import model_from_config
 
 from concurrent.futures import ThreadPoolExecutor
