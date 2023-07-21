@@ -16,10 +16,11 @@ import os
 os.environ["DNA2VEC_CACHE_DIR"] = "/mnt/SSD2/pholur/dna2vec"
 
 grid = {
-    "read_length": [250], #[150, 300, 500],
+    "read_length": [150, 250], #[150, 300, 500],
     "insertion_rate": [0.00009, 0.0009, 0.009],
     "deletion_rate" : [0.00011, 0.0011, 0.011],
-    "qq": [(20,40), (40,60), (60,80)]
+    "qq": [(20,40), (40,60), (60,80)],
+    "topk": [5, 50]
 }
 
 
@@ -77,7 +78,7 @@ if __name__ == "__main__":
     for arg in vars(args):
         f.write(f"# {arg}: {getattr(args, arg)}\n")
         
-    f.write("Quality,Read length,Insertion rate,Deletion rate,Accuracy\n")
+    f.write("Quality,Read length,Insertion rate,Deletion rate,TopK,Accuracy\n")
     f.flush()
     for arg in vars(args):
         logging.info(f"{arg}: {getattr(args, arg)}")
@@ -88,48 +89,32 @@ if __name__ == "__main__":
             for insertion_rate in grid["insertion_rate"]:
                 for deletion_rate in grid["deletion_rate"]:
                     for quality in grid["qq"]:
-                        
-                        perf_read = 0
-                        perf_true = 0
-                        count = 0
-                        
-                        mapped_reads = simulate_mapped_reads(
-                            n_reads_pr_amplicon=args.test,
-                            read_length=read_length,
-                            insertion_rate=insertion_rate,
-                            deletion_rate=deletion_rate,
-                            reference_genome=fasta_file_path,
-                            sequencing_system=args.system,
-                            quality = quality
-                        )
-                        
-                        random.shuffle(mapped_reads)
-                        
-                        for sample in tqdm(mapped_reads):
+                        for topk in grid["topk"]:
+                            perf_read = 0
+                            perf_true = 0
+                            count = 0
                             
-                            query = sample.read.query_sequence
-                            beginning = sample.read.reference_start
-                            matches, timer = evaluate(store, query, args.topk)
-                            if beginning in matches:
-                                perf_read += 1
+                            mapped_reads = simulate_mapped_reads(
+                                n_reads_pr_amplicon=args.test,
+                                read_length=read_length,
+                                insertion_rate=insertion_rate,
+                                deletion_rate=deletion_rate,
+                                reference_genome=fasta_file_path,
+                                sequencing_system=args.system,
+                                quality = quality
+                            )
+                                                        
+                            for sample in tqdm(mapped_reads):
+                                query = sample.read.query_sequence
+                                beginning = sample.read.reference_start
+                                matches, timer = evaluate(store, query, topk)
+                                if beginning in matches:
+                                    perf_read += 1
+                                count += 1
                             
-                            # query = sample.reference
-                            # beginning = sample.read.reference_start
-                            # matches, timer = evaluate(store, query, args.topk)
-                            # if beginning in matches:
-                            #     perf_true += 1
-      
-                            count += 1
-                        
-                        
-                        f.write(f"{str(quality).replace(',',';')},{read_length},{insertion_rate},{deletion_rate},{perf_read/count}\n")
-                        f.flush()
-                        # logging.info("\n\n ###############################################")
-                        # logging.info(f"Read length: {read_length}, \
-                        #             Insertion rate: {insertion_rate}, \
-                        #             Deletion rate: {deletion_rate}, \
-                        #             Accuracy: read - {perf_read/count}, true - {perf_true/count}")
-                        # logging.info("###############################################\n\n")
+                            
+                            f.write(f"{str(quality).replace(',',';')},{read_length},{insertion_rate},{deletion_rate},{topk},{perf_read/count}\n")
+                            f.flush()
                         
     f.close()
                         
