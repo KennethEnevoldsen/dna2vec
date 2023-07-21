@@ -39,7 +39,7 @@ class EvalModel():
 class PineconeStore:
     def __init__(
         self,
-        device: str,
+        device,
         index_name: str,
         metric: str = "cosine",
         model_params = None,

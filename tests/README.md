@@ -40,6 +40,7 @@ For example:
 ```bash
 python upsert.py --recipes "ch2;ch3;ch2,ch3" --checkpoints "trained-ch2-1000"
 ```
+Note for error `pinecone.core.exceptions.PineconeException: UNKNOWN:Error received from peer`: Due to the wait time of creating the pod on Pinecone, you may have to run this command more than once to start the upstream.
 
 ### Step 3a. Naïve Permutation and Accuracy Evaluation
 
