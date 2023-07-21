@@ -1,5 +1,6 @@
 import sys
 sys.path.append("../src/")
+sys.path.append("../evaluate/")
 
 import torch
 from tqdm import tqdm

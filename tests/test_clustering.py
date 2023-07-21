@@ -1,9 +1,11 @@
 import sys
 sys.path.append("../src/")
+sys.append("../evaluate/")
+
 import torch
 from tqdm import tqdm
 
-from tests.pinecone_store import EvalModel
+from pinecone_store import EvalModel
 from helpers import pick_random_lines, pick_from_special_gene_list, pick_from_chimp_2a_2b, pick_from_chromosome3
 
 checkpoints = {}
