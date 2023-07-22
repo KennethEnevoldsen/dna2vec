@@ -10,7 +10,6 @@ from collections import defaultdict
 # sys.path.append("../src/")
 from dna2vec.model import model_from_config
 
-from concurrent.futures import ThreadPoolExecutor
 from collections import defaultdict
 import time
 
@@ -192,94 +191,5 @@ def pick_from_chromosome3(path, samples, per_window = 1000):
     return random_lines
 
 
-def bwamem_align(all_candidate_strings: list[str], 
-                 trained_positions: list[str], 
-                 metadata_set: list[str], 
-                 substring: list[str]
-):
-    '''
-    Currently implemented sequentially
-    '''
-    
-    total_time = 0
-    refined_results = defaultdict(list)
-    
-    for long_string, train_pos, metadata in zip(
-        all_candidate_strings, trained_positions, metadata_set):
-        
-        returned_object = calculate_smith_waterman_distance(long_string, substring)
-        total_time += returned_object["elapsed time"]
-
-        for starting_sub_index in returned_object["begins"]:
-            refined_results[returned_object["distance"]].append(
-                (starting_sub_index, train_pos, metadata)
-            )
-    
-    try:
-        smallest_key = min(refined_results.keys())
-        
-    except ValueError:
-        return [], [], [], total_time
-    
-    smallest_values = refined_results[smallest_key]
-    
-    identified_sub_indices = []
-    identified_indices = []
-    metadata_indices = []
-    
-    for term in smallest_values:
-        identified_sub_indices.append(term[0])
-        identified_indices.append(term[1])
-        metadata_indices.append(term[2])      
-          
-    return identified_sub_indices, identified_indices, metadata_indices, total_time
-
-
-def process_single_string(args:tuple):
-    long_string, substring, train_pos, metadata = args
-    returned_object = calculate_smith_waterman_distance(long_string, substring)
-    return returned_object["distance"], returned_object["begins"], train_pos, metadata, returned_object["elapsed time"]
-
-
-def bwamem_align_parallel(all_candidate_strings: list[str], 
-                          trained_positions: list[str], 
-                          metadata_set: list[str], 
-                          substring: str, 
-                          max_workers: int=50
-):
-    
-    total_time = time.time()
-    refined_results = defaultdict(list)
-
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        results = list(executor.map(process_single_string, 
-                                    zip(all_candidate_strings, 
-                                        [substring]*len(all_candidate_strings), 
-                                        trained_positions, 
-                                        metadata_set)))
-
-    for distance, begins, train_pos, metadata, _ in results:
-        for starting_sub_index in begins:
-            refined_results[distance].append(
-                (starting_sub_index, train_pos, metadata)
-            )
-    
-    try:
-        smallest_key = min(refined_results.keys())
-    except ValueError:
-        return [], [], [], time.time() - total_time
-    
-    smallest_values = refined_results[smallest_key]
-    
-    identified_sub_indices = []
-    identified_indices = []
-    metadata_indices = []
-    
-    for term in smallest_values:
-        identified_sub_indices.append(term[0])
-        identified_indices.append(term[1])
-        metadata_indices.append(term[2])      
-          
-    return identified_sub_indices, identified_indices, metadata_indices, time.time() - total_time
 
 
