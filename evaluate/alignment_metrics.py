@@ -55,41 +55,4 @@ def calculate_smith_waterman_distance(  string1,
             "distance": smith_waterman_distance, 
             "begins":list(set(begins))}
 
-###
-
-def calculate_needleman_wunsch_distance(string1, 
-                                        string2, 
-                                        match_score = 2,
-                                        mismatch_penalty = -1,
-                                        open_gap_penalty = -0.5,
-                                        continue_gap_penalty = -0.1,
-                                        debug = False):
-    start = time.time()
-
-    # Perform the Needleman-Wunsch alignment
-    alignments = pairwise2.align.globalms(
-        string1, string2, match_score, mismatch_penalty, 
-        open_gap_penalty, continue_gap_penalty
-    )
-
-
-    if len(alignments) == 0:
-        return {"elapsed time": time.time() - start, 
-            "distance": float("inf"), 
-            "begins":[]}
-    
-    if debug:
-        print("Best match:")
-        print(format_alignment(*alignments[0]))
-    # Extract the alignment score
-    alignment_score = alignments[0].score
-    begins = []
-    for align in alignments:
-        begins.append(align.start)
-    # Calculate the Needleman-Wunsch distance
-    needleman_wunsch_distance = -alignment_score
-    
-    return {"elapsed time": time.time() - start, 
-            "distance": needleman_wunsch_distance, 
-            "begins":begins}
 
