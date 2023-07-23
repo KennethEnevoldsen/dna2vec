@@ -1,6 +1,6 @@
 import subprocess
 
-def bwa_mem2_align(reference_index, reads_list, output_sam):
+def bwa_mem2_align(reference_index, reads_list, path_to_bwa_folder, output_sam, threads = 1):
     """
     Perform read alignment using BWA-MEM2 and return the list of starting indices.
 
@@ -20,7 +20,7 @@ def bwa_mem2_align(reference_index, reads_list, output_sam):
             f.write(f"@read_{i}\n{read}\n+\n{'I'*len(read)}\n")  # Assuming all reads have the same length
 
     # Command to run BWA-MEM2 alignment
-    bwa_mem2_command = f"bwa-mem2 mem -t 4 {reference_index} {temp_fastq} > {output_sam}"
+    bwa_mem2_command = f"{path_to_bwa_folder}/bwa-mem2-2.2.1_x64-linux/bwa-mem2 mem -t {threads} {reference_index} {temp_fastq} > {output_sam}"
 
     try:
         # Execute BWA-MEM2 command using subprocess

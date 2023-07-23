@@ -1,6 +1,6 @@
 import subprocess
 
-def minimap2_align(reference_index, reads_list, output_sam):
+def minimap2_align(reference_index, reads_list, path_to_minimap_folder, output_sam):
     """
     Perform read alignment using minimap2 and return the list of starting indices.
 
@@ -24,7 +24,7 @@ def minimap2_align(reference_index, reads_list, output_sam):
             f.write(f"@read_{i}\n{read}\n+\n{'I'*len(read)}\n")  # Assuming all reads have the same length
 
     # Command to run minimap2 alignment
-    minimap2_command = f"minimap2 -ax sr {temp_reference} {temp_fastq} > {output_sam}"
+    minimap2_command = f"{path_to_minimap_folder}/minimap2/minimap2 -ax sr {temp_reference} {temp_fastq} > {output_sam}"
 
     try:
         # Execute minimap2 command using subprocess

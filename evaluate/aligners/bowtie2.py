@@ -1,6 +1,6 @@
 import subprocess
 
-def bowtie2_align(reference_index, reads_list, output_sam):
+def bowtie2_align(reference_index, reads_list, path_to_bowtie, output_sam):
     """
     Perform read alignment using Bowtie2 and return the list of starting indices.
 
@@ -20,7 +20,7 @@ def bowtie2_align(reference_index, reads_list, output_sam):
             f.write(f"@read_{i}\n{reads_list[i]}\n+\n{'I'*len(reads_list[i])}\n")  # Assuming all reads have the same length
 
     # Command to run Bowtie2 alignment with interleaved input
-    bowtie2_command = f"bowtie2 -x {reference_index} -U {temp_fastq} -S {output_sam} --interleaved"
+    bowtie2_command = f"{path_to_bowtie}/bowtie2 -x {reference_index} -U {temp_fastq} -S {output_sam} --interleaved"
 
     try:
         # Execute Bowtie2 command using subprocess
