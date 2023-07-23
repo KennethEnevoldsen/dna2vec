@@ -1,7 +1,10 @@
 from helpers import raw_fasta_files
 import numpy as np
 from tqdm import tqdm
-from helpers import bwamem_align, bwamem_align_parallel, initialize_pinecone
+
+from helpers import initialize_pinecone
+from aligners.smith_waterman import bwamem_align, bwamem_align_parallel
+
 from pathlib import Path
 from datetime import datetime
 import logging
@@ -110,7 +113,7 @@ if __name__ == "__main__":
                 if beginning in matches:
                     perf_read += 1
                 else:
-                    logging.info(f"############# Error: \nQuery: {query}\nStart: {beginning}\nMatches: {matches}\n {str(quality).replace(',',';')},{read_length},{insertion_rate},{deletion_rate},{topk},{perf_read/count} \n #############")
+                    logging.info(f"############# Error: \nQuery: {query}\nStart: {beginning}\nMatches: {matches}\n{str(quality).replace(',',';')},{read_length},{insertion_rate},{deletion_rate},{topk},{perf_read/(count+0.0001)} \n #############")
                 count += 1
             
             f.write(f"{str(quality).replace(',',';')},{read_length},{insertion_rate},{deletion_rate},{topk},{perf_read/count}\n")
