@@ -5,7 +5,7 @@ import os
 import subprocess
 import urllib.request
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 from Bio import SeqIO
 from Bio.SeqIO.FastaIO import FastaIterator
@@ -18,6 +18,7 @@ CACHE_DIR = Path.home() / ".cache" / "dna2vec"
 
 
 def download_human_reference_genome(
+    reference: Literal["GRCh38", "CHM13"] = "CHM13",
     force: bool = False, use_uncertified_ssl: bool = False
 ) -> Path:
     """
@@ -25,13 +26,21 @@ def download_human_reference_genome(
     exists, it will not be downloaded again unless force is set to True.
 
     Args:
+        reference: Which reference genome to download. Currently supported are
+            "GRCh38" and "CHM13".
         force: If True, the file will be downloaded even if it already exists.
         use_uncertified_ssl: If True, use uncertified ssl when downloading the file.
     """
     cache_dir = get_cache_dir()
     cache_dir.mkdir(exist_ok=True, parents=True)
 
-    url = "https://ftp.ncbi.nlm.nih.gov/refseq/H_sapiens/annotation/GRCh38_latest/refseq_identifiers/GRCh38_latest_genomic.fna.gz"
+    urls = {
+        "GRCh38":
+        "https://ftp.ncbi.nlm.nih.gov/refseq/H_sapiens/annotation/GRCh38_latest/refseq_identifiers/GRCh38_latest_genomic.fna.gz",
+        "CHM13":
+        "https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/CHM13/assemblies/analysis_set/chm13v2.0.fa.gz"
+    }
+    url = urls[reference]
     output = cache_dir / "GRCh38_latest_genomic.fna.gz"
     unpacked = cache_dir / "GRCh38_latest_genomic.fna"
 
