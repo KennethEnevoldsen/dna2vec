@@ -165,7 +165,7 @@ class FastaUniformSampler(IterableDataset):
     def iter_random_subsequence(self):
         while True:
             L_1 = torch.randint(self.range_min, self.range_max, (1,)).int()
-            i_1 = torch.randint(low=0, high=int(self.len_text - L_1), size= (1,))
+            i_1 = torch.randint(low=0, high=int(self.len_text) - int(L_1), size= (1,))
             x_1 = self.text[i_1 : i_1 + L_1]
 
             # sample lengh of second sequence
