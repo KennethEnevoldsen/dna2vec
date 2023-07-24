@@ -1,29 +1,43 @@
 import random
 import yaml
 
-
-
 from pinecone_store import PineconeStore
 
-import sys
-sys.path.append("../src/")
+from alignment_metrics import calculate_smith_waterman_distance
+from collections import defaultdict
+
+# import sys
+# sys.path.append("../src/")
 from dna2vec.model import model_from_config
+
+from collections import defaultdict
+import time
 
 
 with open("configs/data_recipes.yaml", 'r') as stream:
     data_recipes = yaml.safe_load(stream)
-
+    
 with open("configs/model_checkpoints.yaml", 'r') as stream:
     checkpoints = yaml.safe_load(stream)
+    
+with open("configs/raw.yaml", 'r') as stream:
+    raw_fasta_files = yaml.safe_load(stream)
 
 
-def initialize_pinecone(checkpoint_queue, data_queue):
+def initialize_pinecone(checkpoint_queue: list[str], 
+                        data_queue: list[str], 
+                        device:str="cuda:0"
+):
+    
     import torch
+    
     for alias in checkpoint_queue:
+        
         if alias in checkpoints:
             received = torch.load(checkpoints[alias])
         else:
             received = torch.load(alias)
+            
         config = received["config"]
         config.model_config.tokenizer_path = checkpoints["tokenizer"]
         encoder, pooling, tokenizer = model_from_config(config.model_config)
@@ -33,29 +47,30 @@ def initialize_pinecone(checkpoint_queue, data_queue):
         for data_alias in data_queue:
             config = str("config-" + alias + "-" + data_alias).lower()
             store = PineconeStore(
-                                    device = torch.device("cuda:0"),
+                                    device = torch.device(device),
                                     index_name = str("config-" + alias + "-" + data_alias.replace(",","-")).lower(),
                                     metric = "cosine",
                                     model_params = {
                                         "tokenizer": tokenizer,
                                         "model": encoder,
-                                        "pooling": pooling
+                                        "pooling": pooling,
                                     }
                                 )
+            
             yield store, data_alias, config
 
 
-
-
-def sample_subsequence(string, min_length = 150, max_length = 350):
+def sample_subsequence(string: str, 
+                       min_length: int = 150, 
+                       max_length: int = 350
+):
+    
     subseq_length = random.randint(min_length, max_length)
     # Generate a random starting index
     start_index = random.randint(0, len(string) - subseq_length)
     # Extract the subsequence
     subsequence = string[start_index : start_index + subseq_length]
     return subsequence
-
-
 
 
 def pick_random_lines(path:str = "/home/pholur/dna2vec/tests/data/subsequences_sample_train.txt",
@@ -96,8 +111,6 @@ def pick_random_lines(path:str = "/home/pholur/dna2vec/tests/data/subsequences_s
         raise NotImplementedError("Mode not defined.")
 
 
-
-
 def pick_from_special_gene_list(
             gene_path = "/home/pholur/dna2vec/tests/data/ch2_genes.csv",
             full_path = "/home/pholur/dna2vec/tests/data/NC_000002.12.txt",
@@ -124,18 +137,16 @@ def pick_from_special_gene_list(
 
         for _ in range(samples_per):
             sequences.append((sample_subsequence(big_sequence), label))
-            # sequences.append((big_sequence[t:t+200], label))
-            # t += 200
-            # if t > len(big_sequence):
-            #     break
     
     return sequences
 
 
-
-
-
-def pick_from_chimp_2a_2b(path_2a, path_2b, samples, per_window = 1000):
+def pick_from_chimp_2a_2b(path_2a: str, 
+                          path_2b: str, 
+                          samples: int, 
+                          per_window: int = 1000
+):
+    
     per_region = samples // 2
     number_of_cuts = per_region // per_window
     
@@ -145,10 +156,9 @@ def pick_from_chimp_2a_2b(path_2a, path_2b, samples, per_window = 1000):
     with open(path_2b, "r") as f:
         chromosome_2b = f.read()
     
-    
-    
-    
-    def return_sequences_from_chimp(text_sequence, label):
+    def return_sequences_from_chimp(text_sequence: str, 
+                                    label: str
+    ):
         random_lines = []
         random_indices = random.sample(range(len(text_sequence) - per_window), number_of_cuts)
         for random_index in random_indices:
@@ -159,10 +169,8 @@ def pick_from_chimp_2a_2b(path_2a, path_2b, samples, per_window = 1000):
     
     full_sequences = return_sequences_from_chimp(chromosome_2a, "chimp_2a")
     full_sequences.extend(return_sequences_from_chimp(chromosome_2b, "chimp_2b"))
+    
     return full_sequences
-
-
-
 
 
 def pick_from_chromosome3(path, samples, per_window = 1000):
@@ -181,3 +189,7 @@ def pick_from_chromosome3(path, samples, per_window = 1000):
             random_lines.append((sample_subsequence(full_sequence), str(random_index)))
             
     return random_lines
+
+
+
+
