@@ -24,6 +24,41 @@ with open("configs/raw.yaml", 'r') as stream:
     raw_fasta_files = yaml.safe_load(stream)
 
 
+
+
+def read_fasta_chromosomes(file_path):
+    """
+    Generator function to read a FASTA file and extract each chromosome sequence with its header.
+
+    Parameters:
+        file_path (str): Path to the FASTA file.
+
+    Yields:
+        tuple: A tuple containing the chromosome header and sequence data.
+    """
+    with open(file_path, 'r') as file:
+        header = None
+        sequence = ''
+        for line in file:
+            line = line.strip()
+            if not line:
+                continue  # Skip empty lines
+            if line.startswith('>'):
+                # If the line starts with '>', it is a chromosome header
+                if header is not None:
+                    yield (header, sequence)
+                header = line[1:4]  # Extract the header without '>'
+                sequence = ''
+            else:
+                sequence += line
+        # Yield the last chromosome entry in the file
+        if header is not None:
+            yield (header, sequence)
+
+
+
+
+
 def initialize_pinecone(checkpoint_queue: list[str], 
                         data_queue: list[str], 
                         device:str="cuda:0"

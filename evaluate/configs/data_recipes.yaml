@@ -1,3 +1,4 @@
 ch2: "/home/pholur/dna2vec/evaluate/data/chromosome_2/floodfill.pkl"
 ch3: "/home/pholur/dna2vec/evaluate/data/chromosome_3/floodfill.pkl"
+all: "/mnt/SSD2/pholur/General_Models/data/all/floodfill.pkl"
   
