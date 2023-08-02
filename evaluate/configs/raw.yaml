@@ -1,2 +1,3 @@
 ch2: "/home/pholur/dna2vec/evaluate/data/chromosome_2/NC_000002.fasta"
 ch3: "/home/pholur/dna2vec/evaluate/data/chromosome_3/NC_000003.fasta"
+all: "/mnt/SSD2/pholur/General_Models/data/all/chm13v2.0.fa"  

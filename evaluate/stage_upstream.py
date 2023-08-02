@@ -30,14 +30,17 @@ class Splicer:
             
         sequence = sequence.replace("\n", "")  # incase newline characters exist
         self.sequence = sequence
+        self.len_sequence = len(self.sequence)
 
     def splice(
         self,
         mode: Literal["random", "fixed", "hard_serialized"] = "random",
         sample_length: Any = None,
         overlap: Any = None,
+        starting_offset: int = None,
         number_of_sequences: int = 5,
     ) -> None:
+        
         subsequences: List = []
 
         if mode == "random":
@@ -76,6 +79,7 @@ class Splicer:
             while start < len(self.sequence) and sample_count < 10000000: # NASA-esque hard upper limit
                 subsequences.append([
                     self.sequence[start:min(start + sample_length, len(self.sequence))].upper(), 
+                    str(start + starting_offset),
                     str(start)
                     ]
                 )
@@ -107,21 +111,24 @@ if __name__ == "__main__":
 
     # meta_data = args.meta
     to_file = "floodfill.txt" if args.topath is None else args.topath
+    starting_offset = 0
     
     for header, sequence in read_fasta_chromosomes(os.path.join(data_path, raw_file)):
-        sequence = Splicer(sequence)
-        subsequences = sequence.splice(
+        sequence_obj = Splicer(sequence)
+        subsequences = sequence_obj.splice(
             mode=args.mode_train, 
             sample_length=args.unit_length, 
             number_of_sequences=args.ntrain,
-            overlap=args.overlap
+            overlap=args.overlap,
+            starting_offset=starting_offset
         )
-
+        starting_offset += sequence_obj.len_sequence
 
         for seq in tqdm(subsequences):
             global_dictionary.append({
                 "text": seq[0],
                 "position": seq[1],
+                "local_position": seq[2],
                 "metadata": header
             })
         print(len(global_dictionary))
