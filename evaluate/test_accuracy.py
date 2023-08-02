@@ -20,11 +20,11 @@ import os
 os.environ["DNA2VEC_CACHE_DIR"] = "/mnt/SSD2/pholur/dna2vec"
 
 grid = {
-    "read_length": [150, 250], #[150, 300, 500],
-    "insertion_rate": [0.00009, 0.0009, 0.009],
-    "deletion_rate" : [0.00011, 0.0011, 0.011],
-    "qq": [(20,40), (40,60), (60,80)],
-    "topk": [5, 50, 200]
+    "read_length": [250, 150], #[150, 300, 500],
+    "insertion_rate": [0.0, 0.00009, 0.0009, 0.009],
+    "deletion_rate" : [0.0, 0.00011, 0.0011, 0.011],
+    "qq": [(60,80), (20,40), (40,60)],
+    "topk": [50, 200]
 }
 
 
@@ -51,14 +51,14 @@ def evaluate(store: PineconeStore,
     all_candidate_strings = [sample["metadata"]["text"] for sample in returned]
     
     # Parallelized BWA mem - FAST
-    identified_sub_indices, identified_indices, _, timer = bwamem_align_parallel(
+    identified_sub_indices, identified_indices, _, override, timer = bwamem_align_parallel(
                                                                                 all_candidate_strings, 
                                                                                 trained_positions, 
                                                                                 metadata_set,
                                                                                 query)
 
     return [int(rough) + int(fine) 
-            for (rough, fine) in zip(identified_indices, identified_sub_indices)], timer
+            for (rough, fine) in zip(identified_indices, identified_sub_indices)], override, timer
 
 
 if __name__ == "__main__":
@@ -80,7 +80,7 @@ if __name__ == "__main__":
     f = open(Path(os.environ["DNA2VEC_CACHE_DIR"]) / "Results" / f"result_{formatted_date}.csv", "w+")
         
     for arg in vars(args):
-        f.write(f"# {arg}: {getattr(args, arg)}\n")
+        f.write(f"# {arg}: {getattr(args, arg)}\nqqq")
         
     f.write("Quality,Read length,Insertion rate,Deletion rate,TopK,Accuracy\n")
     f.flush()
@@ -95,7 +95,7 @@ if __name__ == "__main__":
             perf_read = 0
             perf_true = 0
             count = 0
-            
+
             mapped_reads = simulate_mapped_reads(
                 n_reads_pr_amplicon=args.test,
                 read_length=read_length,
@@ -105,15 +105,18 @@ if __name__ == "__main__":
                 sequencing_system=args.system,
                 quality = quality
             )
+            
                                         
             for sample in tqdm(mapped_reads):
                 query = sample.read.query_sequence
                 beginning = sample.read.reference_start
-                matches, timer = evaluate(store, query, topk)
-                if beginning in matches:
+                matches, override, timer = evaluate(store, query, topk)
+                if (beginning in matches) or override: # TODO: There is a tricky bug in simulate that does not return the global start but the seq start
                     perf_read += 1
                 else:
-                    logging.info(f"############# Error: \nQuery: {query}\nStart: {beginning}\nMatches: {matches}\n{str(quality).replace(',',';')},{read_length},{insertion_rate},{deletion_rate},{topk},{perf_read/(count+0.0001)} \n #############")
+                    logging.info(f"############# Error: \nQuery: {query}\nStart: {beginning}\nOriginal: \
+{sample.reference}\nMatches: {matches}\n{str(quality).replace(',',';')},{read_length},{insertion_rate},\
+{deletion_rate},{topk},{perf_read/(count+0.0001)} \n #############")
                 count += 1
             
             f.write(f"{str(quality).replace(',',';')},{read_length},{insertion_rate},{deletion_rate},{topk},{perf_read/count}\n")

@@ -53,7 +53,7 @@ python test_permute.py
 ```
 The additional argument `mode` specifies the type of permutation that is applied on the sequence.For example:
 ```bash
-python test_permute.py --recipes "ch2,ch3" --checkpoints "trained-ch2-1000" --mode "random_sub"
+python test_permute.py --recipes "all" --checkpoints "trained-all" --mode "random_sub" --generalize 25 --test_k 100 --topk 5
 ```
 
 Results corresponding to these evaluations are deposited in `DATA_PATH`. You can visualize the results of these evaluations using the testbench `test_permutes.ipynb`.

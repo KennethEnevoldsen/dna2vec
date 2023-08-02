@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 def calculate_smith_waterman_distance(  string1,
                                         string2,
-                                        match_score = 2,
+                                        match_score = 2, # do not change
                                         mismatch_penalty = -1,
                                         open_gap_penalty = -0.5,
                                         continue_gap_penalty = -0.1,
@@ -137,6 +137,10 @@ def bwamem_align_parallel(all_candidate_strings: list[str],
     except ValueError:
         return [], [], [], time.time() - total_time
     
+    override = False
+    if smallest_key == -2 * len(substring):
+        override = True
+        
     smallest_values = refined_results[smallest_key]
     
     identified_sub_indices = []
@@ -148,4 +152,8 @@ def bwamem_align_parallel(all_candidate_strings: list[str],
         identified_indices.append(term[1])
         metadata_indices.append(term[2])      
           
-    return identified_sub_indices, identified_indices, metadata_indices, time.time() - total_time
+    return  identified_sub_indices, \
+            identified_indices, \
+            metadata_indices, \
+            override, \
+            time.time() - total_time

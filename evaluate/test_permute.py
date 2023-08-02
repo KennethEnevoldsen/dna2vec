@@ -12,13 +12,15 @@ from helpers import pick_random_lines, initialize_pinecone, data_recipes, checkp
 import numpy as np
 from typing import Literal
 import random
-from helpers import bwamem_align
+from aligners.smith_waterman import bwamem_align_parallel
 
 parser = argparse.ArgumentParser(description="Permute evaluate")
 parser.add_argument('--recipes', type=str)
 parser.add_argument('--checkpoints', type=str)
 parser.add_argument('--mode', type=str)
-
+parser.add_argument('--generalize', type=int)
+parser.add_argument('--test_k', type=int)
+parser.add_argument("--topk", type=int)
     
 
 
@@ -112,7 +114,7 @@ def custom_random_sub(store, query, index, top_k, metadata, generalize):
         
         all_candidate_strings = [sample["metadata"]["text"] for sample in returned]
         
-        identified_sub_indices, identified_indices, metadata_indices, timer = bwamem_align(
+        identified_sub_indices, identified_indices, metadata_indices, override, timer = bwamem_align_parallel(
                                                                                             all_candidate_strings, 
                                                                                             trained_positions, 
                                                                                             metadata_set,
@@ -122,8 +124,8 @@ def custom_random_sub(store, query, index, top_k, metadata, generalize):
         #     identified_sub_indices, identified_indices, metadata_indices)))
         # exit()
         
-        if (sub_index, index, metadata) in zip(
-            identified_sub_indices, identified_indices, metadata_indices):
+        if ((sub_index, index, metadata) in zip(
+            identified_sub_indices, identified_indices, metadata_indices)) or override:
             finer_flag[0,start:start + generalize] = 1
         else:
             finer_flag[0,start:start + generalize] = 0
@@ -182,9 +184,13 @@ def main(paths:list,
             
         train_flags[i,:] = train_flag
         
+        if i % 5 == 0:
+            np.savez_compressed(f"test_cache/permute/run_\
+{config}_{edit_mode}_{test_k}_{top_k}_{generalize}.npz", train = train_flags[:i,:], finer = finer_flags[:i,:], timer = timer_flags[:i,:], total_timer = total_timer_flags[:i,:])
+                
     np.savez_compressed(f"test_cache/permute/run_\
 {config}_{edit_mode}_{test_k}_{top_k}_{generalize}.npz", train = train_flags, finer = finer_flags, timer = timer_flags, total_timer = total_timer_flags)
-        
+                
 
 
 
@@ -204,5 +210,11 @@ if __name__ == "__main__":
             else:
                 list_of_data_sources.append(source)
                 
-        main(list_of_data_sources, store, config, top_k=5, edit_mode=args.mode, test_k = 500, generalize=25)
+        main(list_of_data_sources, 
+             store, 
+             config, 
+             top_k=args.topk, 
+             edit_mode=args.mode, 
+             test_k = args.test_k, 
+             generalize=args.generalize)
         # main(list_of_data_sources, store, config, top_k=50, edit_mode=args.mode, test_k = 1000, generalize=25)

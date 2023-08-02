@@ -47,7 +47,7 @@ def read_fasta_chromosomes(file_path):
                 # If the line starts with '>', it is a chromosome header
                 if header is not None:
                     yield (header, sequence)
-                header = line[1:4]  # Extract the header without '>'
+                header = line[1:5]  # Extract the header without '>'
                 sequence = ''
             else:
                 sequence += line
