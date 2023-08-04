@@ -1,6 +1,7 @@
 import torch
 from typing import Literal
 
+
 class EvalModel():
     def __init__(self, 
                  tokenizer, 
@@ -57,10 +58,10 @@ class Baseline():
         self.option = option
         
         
-    def encode(self, x: str):
+    def encode(self, x: list):
         with torch.no_grad():
             if self.option == "nucleotide_transformer":
-                tokens_ids = self.tokenizer.batch_encode_plus([x], return_tensors="pt")["input_ids"]
+                tokens_ids = self.tokenizer.batch_encode_plus(x, return_tensors="pt")["input_ids"]
                 # Compute the embeddings
                 attention_mask = tokens_ids != self.tokenizer.pad_token_id
                 torch_outs = self.model(
@@ -71,15 +72,30 @@ class Baseline():
                 )
 
                 embeddings = torch_outs['hidden_states'][-1].detach().cpu().numpy()
-                mean_sequence_embeddings = torch.sum(attention_mask.unsqueeze(-1)*embeddings, axis=-2)/torch.sum(attention_mask, axis=-1)
+                mean_sequence_embeddings = torch.sum(attention_mask.unsqueeze(-1)*embeddings, axis=-2)/torch.sum(attention_mask, axis=-1).unsqueeze(-1)
                 return torch.nn.functional.normalize(mean_sequence_embeddings.squeeze(), dim=0).detach().cpu().numpy()
             
             elif self.option == "dna2bert":
-                inputs = self.tokenizer(x, return_tensors = 'pt')["input_ids"]
-                hidden_states = self.model(inputs.to(self.device))[0] # [1, sequence_length, 768]
-                embedding_mean = torch.mean(hidden_states[0], dim=0)
-                return torch.nn.functional.normalize(embedding_mean.squeeze(), dim=0).detach().cpu().numpy()
+                tokens_ids = self.tokenizer(x, return_tensors = 'pt')["input_ids"]
+                attention_mask = tokens_ids != self.tokenizer.pad_token_id
+                torch_outs = self.model(
+                    tokens_ids.to(self.device),
+                    attention_mask=attention_mask.to(self.device),
+                    encoder_attention_mask=attention_mask.to(self.device),
+                    output_hidden_states=True
+                )
+
+                embeddings = torch_outs['hidden_states'][-1].detach().cpu().numpy()
+                mean_sequence_embeddings = torch.sum(attention_mask.unsqueeze(-1)*embeddings, axis=-2)/torch.sum(attention_mask, axis=-1).unsqueeze(-1)
+                return torch.nn.functional.normalize(mean_sequence_embeddings.squeeze(), dim=0).detach().cpu().numpy()
             
             else:
                 raise NotImplementedError("Baseline Option undefined")
 
+
+    def get_sentence_embedding_dimension(self):
+        if self.option == "dna2bert":
+            return 768
+        
+        elif self.option == "nucleotide_transformer":
+            return 2560

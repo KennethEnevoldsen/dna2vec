@@ -68,16 +68,25 @@ def initialize_pinecone(checkpoint_queue: list[str],
     
     for alias in checkpoint_queue:
         
-        if alias in checkpoints:
+        if alias in checkpoints and checkpoints[alias] != "Baseline":
             received = torch.load(checkpoints[alias])
-        else:
-            received = torch.load(alias)
+            config = received["config"]
+            config.model_config.tokenizer_path = checkpoints["tokenizer"]
+            encoder, pooling, tokenizer = model_from_config(config.model_config)
+            encoder.load_state_dict(received["model"])
+            encoder.eval()
+            model_params = {
+                                        "tokenizer": tokenizer,
+                                        "model": encoder,
+                                        "pooling": pooling,
+                            }
+            baseline = False
+            baseline_name = None
             
-        config = received["config"]
-        config.model_config.tokenizer_path = checkpoints["tokenizer"]
-        encoder, pooling, tokenizer = model_from_config(config.model_config)
-        encoder.load_state_dict(received["model"])
-        encoder.eval()
+        elif alias in checkpoints and checkpoints[alias] == "Baseline":
+            model_params = None
+            baseline = True
+            baseline_name = alias
         
         for data_alias in data_queue:
             config = str("config-" + alias + "-" + data_alias).lower()
@@ -85,11 +94,9 @@ def initialize_pinecone(checkpoint_queue: list[str],
                                     device = torch.device(device),
                                     index_name = str("config-" + alias + "-" + data_alias.replace(",","-")).lower(),
                                     metric = "cosine",
-                                    model_params = {
-                                        "tokenizer": tokenizer,
-                                        "model": encoder,
-                                        "pooling": pooling,
-                                    }
+                                    model_params = model_params,
+                                    baseline_name=baseline_name,
+                                    baseline=baseline
                                 )
             
             yield store, data_alias, config

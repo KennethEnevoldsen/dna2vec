@@ -4,6 +4,6 @@ initialized-with-one-step: "/mnt/SSD5/pholur/checkpoints/checkpoint_initalialize
 trained-ch2-1000: "/mnt/SSD5/pholur/checkpoints/checkpoint_amber-elevator-53.pt"
 trained-all: "/mnt/SSD2/pholur/General_Models/checkpoint_exalted-dew-60.pt"
 
-dna2bert: 
-nucleodite_transformer: 
+dna2bert: "Baseline"
+nucleodite_transformer: "Baseline"
 
