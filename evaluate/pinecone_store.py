@@ -10,7 +10,8 @@ import pinecone
 import torch
 from tqdm import tqdm
 import random
-from .inference_models import EvalModel, Baseline
+from inference_models import EvalModel, Baseline
+from typing import Optional
 
 class PineconeStore:
     def __init__(
@@ -19,12 +20,12 @@ class PineconeStore:
         index_name: str,
         metric: str = "cosine",
         model_params = None,
-        baseline = False,
-        baseline_name = None
+        baseline: bool = False,
+        baseline_name: Optional[str] = None
     ):
-        if model_params == None and not baseline:
+        if model_params is None and not baseline:
             raise ValueError("Model params are empty.")
-        elif baseline:
+        if baseline:
             self.model = Baseline(
                 option = baseline_name,
                 device = device
@@ -70,7 +71,7 @@ class PineconeStore:
                 name=index_name,
                 dimension=dimension,
                 metric=metric,
-                pod_type="s1.x4"
+                pod_type="s2.x8"
             )
 
         # now connect to the index
