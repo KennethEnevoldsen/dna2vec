@@ -10,31 +10,7 @@ import pinecone
 import torch
 from tqdm import tqdm
 import random
-
-
-
-class EvalModel():
-    def __init__(self, tokenizer, model, pooling, device):
-        self.tokenizer = tokenizer
-        self.model = model
-        
-        self.pooling = pooling
-        self.pooling.to(device)
-        
-        self.model.to(device)
-        self.device = device
-        
-        self.model.eval()
-    
-    def encode(self, x):
-        with torch.no_grad():
-            input_data = self.tokenizer.tokenize(x).to_torch()
-            last_hidden_state = self.model(input_ids = input_data["input_ids"].to(self.device), 
-                                           attention_mask = input_data["attention_mask"].to(self.device))
-            y = self.pooling(last_hidden_state, attention_mask=input_data["attention_mask"].to(self.device))
-            return torch.nn.functional.normalize(y.squeeze(), dim=0).detach().cpu().numpy()
-
-        
+from .inference_models import EvalModel, Baseline
 
 class PineconeStore:
     def __init__(
@@ -43,9 +19,16 @@ class PineconeStore:
         index_name: str,
         metric: str = "cosine",
         model_params = None,
+        baseline = False,
+        baseline_name = None
     ):
-        if model_params == None:
+        if model_params == None and not baseline:
             raise ValueError("Model params are empty.")
+        elif baseline:
+            self.model = Baseline(
+                option = baseline_name,
+                device = device
+            )
         else:
             self.model = EvalModel(
                 model_params["tokenizer"],
