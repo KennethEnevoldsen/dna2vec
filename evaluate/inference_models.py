@@ -32,7 +32,7 @@ class EvalModel():
 
 class Baseline():
     def __init__(self, 
-                 option: Literal["dna2bert", "nucleotide_transformer"], 
+                 option: Literal["dna2bert", "nucleotide-transformer"], 
                  device: str = "cuda:1",
                  cache_dir: str = '/mnt/SSD2/pholur/dna2vec/baselines'):
         
@@ -42,13 +42,13 @@ class Baseline():
         from transformers import AutoTokenizer, AutoModelForMaskedLM, AutoModel
         
         if option == "dna2bert":
-            self.tokenizer = AutoTokenizer.from_pretrained("zhihan1996/DNA_bert_6", trust_remote_code=True)
-            self.model = AutoModel.from_pretrained("zhihan1996/DNA_bert_6", trust_remote_code=True)
+            self.tokenizer = AutoTokenizer.from_pretrained("zhihan1996/DNABERT-2-117M", trust_remote_code=True)
+            self.model = AutoModel.from_pretrained("zhihan1996/DNABERT-2-117M", trust_remote_code=True)
             self.model.to(device)
         
-        elif option == "nucleotide_transformer":
-            self.tokenizer = AutoTokenizer.from_pretrained("InstaDeepAI/nucleotide-transformer-2.5b-multi-species")
-            self.model = AutoModelForMaskedLM.from_pretrained("InstaDeepAI/nucleotide-transformer-2.5b-multi-species")
+        elif option == "nucleotide-transformer":
+            self.tokenizer = AutoTokenizer.from_pretrained("InstaDeepAI/nucleotide-transformer-500m-human-ref")
+            self.model = AutoModelForMaskedLM.from_pretrained("InstaDeepAI/nucleotide-transformer-500m-human-ref")
             self.model.to(device)
             self.model.eval()
         
@@ -60,8 +60,8 @@ class Baseline():
         
     def encode(self, x: list):
         with torch.no_grad():
-            if self.option == "nucleotide_transformer":
-                tokens_ids = self.tokenizer.batch_encode_plus(x, return_tensors="pt")["input_ids"]
+            if self.option == "nucleotide-transformer":
+                tokens_ids = self.tokenizer.batch_encode_plus(x, return_tensors="pt", padding=True, truncation=True)["input_ids"]
                 # Compute the embeddings
                 attention_mask = tokens_ids != self.tokenizer.pad_token_id
                 torch_outs = self.model(
@@ -70,22 +70,23 @@ class Baseline():
                     encoder_attention_mask=attention_mask.to(self.device),
                     output_hidden_states=True
                 )
-
+                
                 embeddings = torch_outs['hidden_states'][-1].detach().cpu().numpy()
                 mean_sequence_embeddings = torch.sum(attention_mask.unsqueeze(-1)*embeddings, axis=-2)/torch.sum(attention_mask, axis=-1).unsqueeze(-1)
                 return torch.nn.functional.normalize(mean_sequence_embeddings.squeeze(), dim=0).detach().cpu().numpy()
             
             elif self.option == "dna2bert":
-                tokens_ids = self.tokenizer(x, return_tensors = 'pt')["input_ids"]
+                tokens_ids = self.tokenizer(x, return_tensors = 'pt', padding=True)["input_ids"]
                 attention_mask = tokens_ids != self.tokenizer.pad_token_id
+                
                 torch_outs = self.model(
                     tokens_ids.to(self.device),
                     attention_mask=attention_mask.to(self.device),
                     encoder_attention_mask=attention_mask.to(self.device),
-                    output_hidden_states=True
+                    output_hidden_states=True,
                 )
 
-                embeddings = torch_outs['hidden_states'][-1].detach().cpu().numpy()
+                embeddings = torch_outs[0].detach().cpu().numpy()
                 mean_sequence_embeddings = torch.sum(attention_mask.unsqueeze(-1)*embeddings, axis=-2)/torch.sum(attention_mask, axis=-1).unsqueeze(-1)
                 return torch.nn.functional.normalize(mean_sequence_embeddings.squeeze(), dim=0).detach().cpu().numpy()
             
@@ -97,5 +98,5 @@ class Baseline():
         if self.option == "dna2bert":
             return 768
         
-        elif self.option == "nucleotide_transformer":
-            return 2560
+        elif self.option == "nucleotide-transformer":
+            return 1280

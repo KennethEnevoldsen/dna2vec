@@ -5,5 +5,5 @@ trained-ch2-1000: "/mnt/SSD5/pholur/checkpoints/checkpoint_amber-elevator-53.pt"
 trained-all: "/mnt/SSD2/pholur/General_Models/checkpoint_exalted-dew-60.pt"
 
 dna2bert: "Baseline"
-nucleodite_transformer: "Baseline"
+nucleotide-transformer: "Baseline"
 
