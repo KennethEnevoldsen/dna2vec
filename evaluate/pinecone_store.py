@@ -86,7 +86,8 @@ class PineconeStore:
             pinecone.create_index(
                 name=index_name,
                 dimension=dimension,
-                metric=metric
+                metric=metric,
+                pod_type="s1.x4"
             )
 
         # now connect to the index
