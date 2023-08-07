@@ -159,6 +159,25 @@ def map_reads_to_reference(
     return unmapped_reads
 
 
+def _create_cache_path(
+        n_reads_pr_amplicon: int,
+        read_length: int,
+        insertion_rate: float,
+        deletion_rate: float,
+        quality: Tuple[int, int],
+        sequencing_system: SEQUENCE_SYSTEMS,
+) -> Path:
+    file_name_stubs = ["reads",
+                 f"{n_reads_pr_amplicon}",
+                 f"{read_length}",
+                f"IR{str(insertion_rate).replace('.', '-dot-')}",
+                f"DR{str(deletion_rate).replace('.', '-dot-')}",
+                f"Q{str(quality[0])}-{str(quality[1])}",
+                f"{sequencing_system}"]
+    
+    file_name = "_".join(file_name_stubs)
+    return get_cache_dir() / "simulated_reads" / file_name
+
 def simulate_mapped_reads(
     n_reads_pr_amplicon: int,
     read_length: int,
@@ -166,19 +185,20 @@ def simulate_mapped_reads(
     deletion_rate: float = 0.00011,
     sequencing_system: SEQUENCE_SYSTEMS = "HS20",
     reference_genome: Union[Path, None] = None,
-    quality: Tuple[int, int] = (60,100)
+    quality: Tuple[int, int] = (60,93)
 ):
     """
     Simulates reads and maps them to the reference genome.
     """
 
-    output_path = (
-        get_cache_dir()
-        / "simulated_reads"
-        / f"reads_{n_reads_pr_amplicon}_{read_length}_\
-{str(insertion_rate).replace('.', '_dot_')}_\
-{str(deletion_rate).replace('.', '_dot_')}_{str(quality)}_\
-{sequencing_system}"
+
+    output_path = _create_cache_path(
+        n_reads_pr_amplicon=n_reads_pr_amplicon,
+        read_length=read_length,
+        insertion_rate=insertion_rate,
+        deletion_rate=deletion_rate,
+        sequencing_system=sequencing_system,
+        quality=quality
     )
     
     output_path.mkdir(parents=True, exist_ok=True)
