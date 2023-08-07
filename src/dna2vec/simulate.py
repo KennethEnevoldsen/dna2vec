@@ -58,7 +58,7 @@ def simulate_reads_to_disk(
     reference_genome: Union[Path, None] = None,
     insertion_rate: float = 0.00009,
     deletion_rate: float = 0.00011,
-    quality: Tuple[int, int] = (60,100),
+    quality: Tuple[int, int] = (60,93),
     sequencing_system: SEQUENCE_SYSTEMS = "HS20",
 ) -> Path:
     """
