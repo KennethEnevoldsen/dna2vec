@@ -36,6 +36,7 @@ class ReadAndReference:
 
     read: AlignedSegment
     reference: Union[str, None] = None
+    id: Union[str, None] = None
 
     def is_mapped(self) -> bool:
         return self.reference is not None
@@ -154,6 +155,7 @@ def map_reads_to_reference(
             length = read.query_length
             original_sequence = seq.seq[start : start + length]
             match.reference = str(original_sequence)
+            match.id = seq.id
             assert read.query_sequence == read.seq
 
     return unmapped_reads
