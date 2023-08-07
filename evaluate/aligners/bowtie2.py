@@ -16,11 +16,11 @@ def bowtie2_align(reference_index, reads_list, path_to_bowtie, output_sam):
     # Create a temporary interleaved FASTQ file to store the reads
     temp_fastq = "temp_interleaved.fastq"
     with open(temp_fastq, "w") as f:
-        for i in range(0, len(reads_list), 2):
+        for i in range(0, len(reads_list)):
             f.write(f"@read_{i}\n{reads_list[i]}\n+\n{'I'*len(reads_list[i])}\n")  # Assuming all reads have the same length
 
     # Command to run Bowtie2 alignment with interleaved input
-    bowtie2_command = f"{path_to_bowtie}/bowtie2 -x {reference_index} -U {temp_fastq} -S {output_sam} --interleaved"
+    bowtie2_command = f"{path_to_bowtie}/bowtie2 -x {reference_index} -q {temp_fastq} -S {output_sam}" # --interleaved"
 
     try:
         # Execute Bowtie2 command using subprocess

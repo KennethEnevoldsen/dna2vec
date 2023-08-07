@@ -13,9 +13,9 @@ def minimap2_align(reference_index, reads_list, path_to_minimap_folder, output_s
         list: A list containing the starting indices of each read in the alignment.
     """
     # Create a temporary FASTA file to store the reference genome
-    temp_reference = "temp_reference.fasta"
-    with open(temp_reference, "w") as f:
-        f.write(">Reference\n" + reference_index + "\n")
+    # temp_reference = "temp_reference.fasta"
+    # with open(temp_reference, "w") as f:
+    #     f.write(">Reference\n" + reference_index + "\n")
 
     # Create a temporary FASTQ file to store the reads
     temp_fastq = "temp_reads.fastq"
@@ -24,7 +24,7 @@ def minimap2_align(reference_index, reads_list, path_to_minimap_folder, output_s
             f.write(f"@read_{i}\n{read}\n+\n{'I'*len(read)}\n")  # Assuming all reads have the same length
 
     # Command to run minimap2 alignment
-    minimap2_command = f"{path_to_minimap_folder}/minimap2/minimap2 -ax sr {temp_reference} {temp_fastq} > {output_sam}"
+    minimap2_command = f"{path_to_minimap_folder}/minimap2/minimap2 -ax sr {reference_index} {temp_fastq} > {output_sam}"
 
     try:
         # Execute minimap2 command using subprocess
@@ -48,4 +48,4 @@ def minimap2_align(reference_index, reads_list, path_to_minimap_folder, output_s
 
     finally:
         # Remove the temporary files
-        subprocess.run(f"rm {temp_reference} {temp_fastq}", shell=True, check=True)
+        subprocess.run(f"rm {temp_fastq}", shell=True, check=True)

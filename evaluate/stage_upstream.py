@@ -2,6 +2,7 @@ from typing import Any, List, Literal
 import argparse
 import numpy as np
 from tqdm import tqdm
+from helpers import read_fasta_chromosomes
 
 parser = argparse.ArgumentParser(description="Path to I/O data")
 parser.add_argument('--datapath', type=str)
@@ -72,9 +73,9 @@ class Splicer:
             
             start = 0
             sample_count = 0
-            while start < len(self.sequence) and sample_count < 500000: # NASA-esque hard upper limit
+            while start < len(self.sequence) and sample_count < 10000000: # NASA-esque hard upper limit
                 subsequences.append([
-                    self.sequence[start:min(start + sample_length, len(self.sequence))], 
+                    self.sequence[start:min(start + sample_length, len(self.sequence))].upper(), 
                     str(start)
                     ]
                 )
@@ -85,7 +86,6 @@ class Splicer:
                     print("Overlap too large or not provided. Falling back to hard cutoffs.")
                 sample_count += 1
                 
-            
         else:
             raise ValueError("Mode is undefined. Please use: random, fixed, hard_serialized.")
 
@@ -99,33 +99,32 @@ if __name__ == "__main__":
 
     data_path = args.datapath
     raw_file = args.rawfile
-    
-    if ".fasta" not in raw_file:
-        raise FileNotFoundError("Fasta file not found error.")
-
-    meta_data = args.meta
-    to_file = "floodfill.txt" if args.topath is None else args.topath
-    
-    with open(os.path.join(data_path, raw_file), "r") as f:
-        sequence = f.read()
-
-    sequence = Splicer(sequence)
-    subsequences = sequence.splice(
-        mode=args.mode_train, 
-        sample_length=args.unit_length, 
-        number_of_sequences=args.ntrain,
-        overlap=args.overlap
-    )
-
     import pickle
     global_dictionary = []
-    for seq in tqdm(subsequences):
-        global_dictionary.append({
-            "text": seq[0],
-            "position": seq[1],
-            "metadata": meta_data
-        })
+    
+    if ".fasta" not in raw_file and ".fa" not in raw_file:
+        raise FileNotFoundError("Fasta file not found error.")
 
+    # meta_data = args.meta
+    to_file = "floodfill.txt" if args.topath is None else args.topath
+    
+    for header, sequence in read_fasta_chromosomes(os.path.join(data_path, raw_file)):
+        sequence = Splicer(sequence)
+        subsequences = sequence.splice(
+            mode=args.mode_train, 
+            sample_length=args.unit_length, 
+            number_of_sequences=args.ntrain,
+            overlap=args.overlap
+        )
+
+
+        for seq in tqdm(subsequences):
+            global_dictionary.append({
+                "text": seq[0],
+                "position": seq[1],
+                "metadata": header
+            })
+        print(len(global_dictionary))
     file = open(os.path.join(data_path, to_file), 'wb')
     pickle.dump(global_dictionary, file)
     file.close()
