@@ -17,6 +17,16 @@ apt install art-nextgen-simulation-tools
 ```
 
 
+## Training the model
+
+To train the model, simply run:
+
+```
+python train.py
+```
+
+The training script includes the config object. The config object contains all the hyperparameters for the model.
+
 ## Running the Splicer
 
 To run the Splicer, use the following command:
