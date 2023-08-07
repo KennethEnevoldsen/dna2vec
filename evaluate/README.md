@@ -40,6 +40,7 @@ For example:
 ```bash
 python upsert.py --recipes "ch2;ch3;ch2,ch3" --checkpoints "trained-ch2-1000"
 ```
+Note for error `pinecone.core.exceptions.PineconeException: UNKNOWN:Error received from peer`: Due to the wait time of creating the pod on Pinecone, you may have to run this command more than once to start the upstream.
 
 ### Step 3a. Naïve Permutation and Accuracy Evaluation
 
@@ -58,7 +59,50 @@ python test_permute.py --recipes "ch2,ch3" --checkpoints "trained-ch2-1000" --mo
 Results corresponding to these evaluations are deposited in `DATA_PATH`. You can visualize the results of these evaluations using the testbench `test_permutes.ipynb`.
 
 ### Step 3b. Manifold Visualization
+See `test_clustering.py` and `test_clustering.ipynb`.
 
 
-### Step 4. Ablation Studies
+### Step 4. Accuracy Computation
+Modify the parameter grid in `test_accuracy.py` and run the following:
+```bash
+python test_accuracy.py --recipe "ch2" --checkpoints "trained-ch2-1000" --test 10000 --system "MSv3" 
+```
 
+## Setting up reference baselines
+### BWAMem2
+Please follow the instructions [here](https://github.com/bwa-mem2/bwa-mem2) to install the binary. The command:
+```bash
+curl -L https://github.com/bwa-mem2/bwa-mem2/releases/download/v2.2.1/bwa-mem2-2.2.1_x64-linux.tar.bz2 \
+  | tar jxf -
+```
+
+The binary is more optimized than the build from source and **is recommended**. Additional index files are stored under `fasta_path` (see below). Indexing is an expensive operation. Please run with care. Indexing Chromosome 2 takes around `150 seconds`.
+```bash
+<binary path>/bwa-mem2-2.2.1_x64-linux/bwa-mem2 index <fasta_path>/<sample>.fasta
+```
+Following the indexing, you can run calls to our custom Python wrapper (`evaluate/aligners/bwamem2.py`) as follows:
+```bash
+bwa_mem2_align(reference_path, [sample_read]*10000, "/home/pholur/dna2vec/evaluate/aligners", "./test.sam");
+```
+
+### Minimap2
+Please follow the instructions [here](https://github.com/lh3/minimap2) to download the source and make. The command:
+```bash
+git clone https://github.com/lh3/minimap2
+cd minimap2 && make
+```
+Alignment queries can now be attempted:
+```bash
+minimap2_align("<path>/chromosome_2/", [sample_read]*10000, 
+               "<source path>/dna2vec/evaluate/aligners", "./test.sam");
+```
+
+### Bowtie2
+Please follow the instructions [here](https://github.com/BenLangmead/bowtie2) to download a [build](https://github.com/BenLangmead/bowtie2/releases) that suits your server configurations. Build the index with (takes a couple minutes per chromosome):
+```bash
+/bowtie2-2.5.1-linux-x86_64/bowtie2-build <path>/NC_000002.fasta <same or different index path>/NC_000002
+```
+Alignment queries can now be attempted:
+```bash
+bowtie2_align(reference_path, [sample_read]*10000, "<source path>/dna2vec/evaluate/aligners/bowtie2-2.5.1-linux-x86_64", "./test.sam");
+```

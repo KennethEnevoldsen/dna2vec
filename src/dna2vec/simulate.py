@@ -58,6 +58,7 @@ def simulate_reads_to_disk(
     reference_genome: Union[Path, None] = None,
     insertion_rate: float = 0.00009,
     deletion_rate: float = 0.00011,
+    quality: Tuple[int, int] = (60,100),
     sequencing_system: SEQUENCE_SYSTEMS = "HS20",
 ) -> Path:
     """
@@ -94,6 +95,10 @@ def simulate_reads_to_disk(
         _format_scientific_notation(insertion_rate),
         "--delRate",
         _format_scientific_notation(deletion_rate),
+        "--minQ",
+        str(quality[0]),
+        "--maxQ",
+        str(quality[1])
     ]
     logging.info(f"Running ART with the following command: {' '.join(cmd)}")
 
@@ -116,25 +121,22 @@ def load_simulated_reads_from_disk(
     """
     logging.info(f"Reading simulated reads from {simulated_path}")
 
-    fastq = simulated_path.with_suffix(".fq")
     sam = simulated_path.with_suffix(".sam")
 
     # load using pysam
     aligned_segments = pysam.AlignmentFile(str(sam))
-
     return list(aligned_segments)
 
 
 def map_reads_to_reference(
     reads: List[AlignedSegment],
-    reference: Optional[FastaIterator] = None,
-):
+    reference: Optional[Path] = None,
+) -> List[ReadAndReference]:
     """
     Map a read to a reference genome.
     """
-    if reference is None:
-        reference = load_human_reference_genome()
-
+    reference = load_human_reference_genome(reference)
+    
     id2read = defaultdict(list)
     unmapped_reads = []
     for read in reads:
@@ -164,6 +166,7 @@ def simulate_mapped_reads(
     deletion_rate: float = 0.00011,
     sequencing_system: SEQUENCE_SYSTEMS = "HS20",
     reference_genome: Union[Path, None] = None,
+    quality: Tuple[int, int] = (60,100)
 ):
     """
     Simulates reads and maps them to the reference genome.
@@ -172,8 +175,12 @@ def simulate_mapped_reads(
     output_path = (
         get_cache_dir()
         / "simulated_reads"
-        / f"reads_{n_reads_pr_amplicon}_{read_length}_{insertion_rate}_{deletion_rate}_{sequencing_system}"
+        / f"reads_{n_reads_pr_amplicon}_{read_length}_\
+{str(insertion_rate).replace('.', '_dot_')}_\
+{str(deletion_rate).replace('.', '_dot_')}_{str(quality)}_\
+{sequencing_system}"
     )
+    
     output_path.mkdir(parents=True, exist_ok=True)
 
     if not output_path.with_suffix(".sam").exists():
@@ -185,6 +192,7 @@ def simulate_mapped_reads(
             insertion_rate=insertion_rate,
             deletion_rate=deletion_rate,
             sequencing_system=sequencing_system,
+            quality=quality
         )
     else:
         logging.info(
@@ -192,8 +200,10 @@ def simulate_mapped_reads(
         )
         simulated_reads = output_path
 
+
     mapped_reads = map_reads_to_reference(
         reads=load_simulated_reads_from_disk(simulated_reads),
+        reference=reference_genome
     )
 
     return mapped_reads
