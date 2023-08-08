@@ -21,60 +21,62 @@ parser.add_argument('--mode', type=str)
 parser.add_argument('--generalize', type=int)
 parser.add_argument('--test_k', type=int)
 parser.add_argument("--topk", type=int)
+parser.add_argument("--device", type=str)
+
     
 
 
-def edit(query, edit_mode, generalize):
+# def edit(query, edit_mode, generalize):
     
-    if edit_mode == "end deplete":
-        if np.random.rand() > 0.5:
-            return query[generalize:]
-        else:
-            return query[:-1*generalize]
+#     if edit_mode == "end deplete":
+#         if np.random.rand() > 0.5:
+#             return query[generalize:]
+#         else:
+#             return query[:-1*generalize]
         
-    elif edit_mode == "swap":
-        char_list = list(query)
-        idx = list(range(len(char_list)))
+#     elif edit_mode == "swap":
+#         char_list = list(query)
+#         idx = list(range(len(char_list)))
         
-        for _ in range(generalize):
-            i1, i2 = random.sample(idx, 2)
-            char_list[i1], char_list[i2] = char_list[i2], char_list[i1]
+#         for _ in range(generalize):
+#             i1, i2 = random.sample(idx, 2)
+#             char_list[i1], char_list[i2] = char_list[i2], char_list[i1]
         
-        return ''.join(char_list)
+#         return ''.join(char_list)
 
-    elif edit_mode == "random deplete":
-        try:
-            start_index = random.sample(range(len(query) - generalize), 1)[0]
-            query = query[:start_index] + query[(start_index + generalize):]
-        except:
-            query = query
-        return query
+#     elif edit_mode == "random deplete":
+#         try:
+#             start_index = random.sample(range(len(query) - generalize), 1)[0]
+#             query = query[:start_index] + query[(start_index + generalize):]
+#         except:
+#             query = query
+#         return query
 
-    else:
-        raise NotImplementedError("Edit mode is under-defined.")
-
-
+#     else:
+#         raise NotImplementedError("Edit mode is under-defined.")
 
 
-def permute(store, query, index, top_k, metadata, edit_mode, generalize):
+
+
+# def permute(store, query, index, top_k, metadata, edit_mode, generalize):
     
-    train_flag = np.zeros((1,len(query)))
-    start = 0
-    for _ in range(len(query) // generalize):
+#     train_flag = np.zeros((1,len(query)))
+#     start = 0
+#     for _ in range(len(query) // generalize):
         
-        returned = store.query([query], top_k=top_k)["matches"]
-        trained_positions = {sample["metadata"]["position"] for sample in returned}
-        metadata_set = {sample["metadata"]["metadata"] for sample in returned}
+#         returned = store.query([query], top_k=top_k)["matches"]
+#         trained_positions = {sample["metadata"]["position"] for sample in returned}
+#         metadata_set = {sample["metadata"]["metadata"] for sample in returned}
         
-        if index in trained_positions and metadata in metadata_set:
-            train_flag[0,start:start + generalize] = 1
-        else:
-            train_flag[0,start:start + generalize] = 0
+#         if index in trained_positions and metadata in metadata_set:
+#             train_flag[0,start:start + generalize] = 1
+#         else:
+#             train_flag[0,start:start + generalize] = 0
         
-        start += generalize
-        query = edit(query, edit_mode, generalize)
+#         start += generalize
+#         query = edit(query, edit_mode, generalize)
         
-    return train_flag
+#     return train_flag
 
 
 
@@ -95,8 +97,7 @@ def custom_random_sub(store, query, index, top_k, metadata, generalize):
     total_timer_flag = np.zeros_like(train_flag)
     start = 0
 
-    for k in tqdm(range(1, len(query) // generalize)):
-        
+    for k in tqdm(range(1, (len(query) // generalize) + 1)):
         beginning_time = time.time()
 
         sub_index, substring = identify_random_subsequence(
@@ -107,32 +108,22 @@ def custom_random_sub(store, query, index, top_k, metadata, generalize):
         trained_positions = [sample["metadata"]["position"] for sample in returned]
         metadata_set = [sample["metadata"]["metadata"] for sample in returned]
         
-        if (metadata,index) in zip(metadata_set, trained_positions):
-            train_flag[0,start:start + generalize] = 1
-        else:
-            train_flag[0,start:start + generalize] = 0
-        
         all_candidate_strings = [sample["metadata"]["text"] for sample in returned]
         
-        identified_sub_indices, identified_indices, metadata_indices, override, timer = bwamem_align_parallel(
+        identified_sub_indices, identified_indices, _, timer, smallest_key = bwamem_align_parallel(
                                                                                             all_candidate_strings, 
                                                                                             trained_positions, 
                                                                                             metadata_set,
                                                                                             substring)
         
-        # print((sub_index, index, metadata), list(zip(
-        #     identified_sub_indices, identified_indices, metadata_indices)))
-        # exit()
-        
-        if ((sub_index, index, metadata) in zip(
-            identified_sub_indices, identified_indices, metadata_indices)) or override:
+        if int(index) + int(sub_index) in [int(tup[0]) + int(tup[1]) for tup in zip(identified_sub_indices, identified_indices)] or \
+            smallest_key == -2*len(query): # exact SW match
             finer_flag[0,start:start + generalize] = 1
         else:
             finer_flag[0,start:start + generalize] = 0
         timer_flag[0, start:start + generalize] = timer
         total_timer_flag[0, start:start + generalize] = time.time() - beginning_time
         start += generalize
-      
     return train_flag, finer_flag, timer_flag, total_timer_flag
 
 
@@ -174,13 +165,14 @@ def main(paths:list,
             total_timer_flags[i,:] = total_timer
             
         else:
-            train_flag = permute(store, 
-                                query, 
-                                index, 
-                                top_k,  
-                                metadata, 
-                                edit_mode, 
-                                generalize)
+            raise NotImplementedError("Edit mode is outdated.")
+            # train_flag = permute(store, 
+            #                     query, 
+            #                     index, 
+            #                     top_k,  
+            #                     metadata, 
+            #                     edit_mode, 
+            #                     generalize)
             
         train_flags[i,:] = train_flag
         
@@ -201,7 +193,7 @@ if __name__ == "__main__":
     data_queue = args.recipes.split(";")
     checkpoint_queue = args.checkpoints.split(";")
     
-    for (store, data_alias, config) in initialize_pinecone(checkpoint_queue, data_queue):
+    for (store, data_alias, config) in initialize_pinecone(checkpoint_queue, data_queue, args.device):
         list_of_data_sources = []
         sources = data_alias.split(",")
         for source in sources:

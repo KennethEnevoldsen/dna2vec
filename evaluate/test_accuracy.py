@@ -2,7 +2,7 @@ from helpers import raw_fasta_files
 import numpy as np
 from tqdm import tqdm
 
-from helpers import initialize_pinecone
+from helpers import initialize_pinecone, is_within_range_of_any_element
 from aligners.smith_waterman import bwamem_align, bwamem_align_parallel
 
 from pathlib import Path
@@ -36,6 +36,7 @@ parser.add_argument('--checkpoints', type=str)
 parser.add_argument('--topk', type=int)
 parser.add_argument('--test', type=int)
 parser.add_argument('--system', type=str)
+parser.add_argument('--exactness', type=int)
 ###
 
 
@@ -51,14 +52,15 @@ def evaluate(store: PineconeStore,
     all_candidate_strings = [sample["metadata"]["text"] for sample in returned]
     
     # Parallelized BWA mem - FAST
-    identified_sub_indices, identified_indices, _, override, timer = bwamem_align_parallel(
+    identified_sub_indices, identified_indices, _, timer, smallest_distance = bwamem_align_parallel(
                                                                                 all_candidate_strings, 
                                                                                 trained_positions, 
                                                                                 metadata_set,
                                                                                 query)
 
-    return [int(rough) + int(fine) 
-            for (rough, fine) in zip(identified_indices, identified_sub_indices)], override, timer
+    return [(int(full) + int(fine))
+            for (full, fine) in zip(identified_indices, identified_sub_indices)], \
+                    timer, smallest_distance
 
 
 if __name__ == "__main__":
@@ -84,6 +86,7 @@ if __name__ == "__main__":
         
     f.write("Quality,Read length,Insertion rate,Deletion rate,TopK,Accuracy\n")
     f.flush()
+    
     for arg in vars(args):
         logging.info(f"{arg}: {getattr(args, arg)}")
         
@@ -106,17 +109,19 @@ if __name__ == "__main__":
                 quality = quality
             )
             
-                                        
             for sample in tqdm(mapped_reads):
                 query = sample.read.query_sequence
                 beginning = sample.read.reference_start
-                matches, override, timer = evaluate(store, query, topk)
-                if (beginning in matches) or override: # TODO: There is a tricky bug in simulate that does not return the global start but the seq start
+
+                matches, timer, smallest_distance = evaluate(store, query, topk)
+                full_start = beginning + sample.seq_offset
+                if is_within_range_of_any_element(full_start, matches, args.exactness) or \
+                    abs(smallest_distance + 2*len(query)) < args.distance_bound:
                     perf_read += 1
                 else:
                     logging.info(f"############# Error: \nQuery: {query}\nStart: {beginning}\nOriginal: \
 {sample.reference}\nMatches: {matches}\n{str(quality).replace(',',';')},{read_length},{insertion_rate},\
-{deletion_rate},{topk},{perf_read/(count+0.0001)} \n #############")
+{deletion_rate},{topk},{perf_read/(count+0.0001)} \n #############") 
                 count += 1
             
             f.write(f"{str(quality).replace(',',';')},{read_length},{insertion_rate},{deletion_rate},{topk},{perf_read/count}\n")

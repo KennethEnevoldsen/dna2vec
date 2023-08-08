@@ -57,6 +57,12 @@ def read_fasta_chromosomes(file_path):
 
 
 
+def is_within_range_of_any_element(X: int, Y: list, Z: int):
+    for element in Y:
+        if abs(X - element) <= Z:
+            return True
+    return False
+
 
 
 def initialize_pinecone(checkpoint_queue: list[str], 

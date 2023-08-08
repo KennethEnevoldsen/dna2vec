@@ -107,7 +107,7 @@ class PineconeStore:
         return "".join(random.choice(letters) for _ in range(length))
 
     def trigger_pinecone_upsertion(self, file_paths: list, 
-                                   batch_size: int = 64):
+                                   batch_size: int = 100):
         from tqdm import tqdm
         
         for file_path in file_paths:

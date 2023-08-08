@@ -147,6 +147,7 @@ def map_reads_to_reference(
         id2read[_id].append(unmapped_read)
         unmapped_reads.append(unmapped_read)
 
+    seq_offset = 0
     for seq in reference:
         matches = id2read[seq.id]
         for match in matches:
@@ -156,8 +157,9 @@ def map_reads_to_reference(
             original_sequence = seq.seq[start : start + length]
             match.reference = str(original_sequence)
             match.id = seq.id
+            match.seq_offset = seq_offset
             assert read.query_sequence == read.seq
-
+        seq_offset += len(seq.seq)
     return unmapped_reads
 
 

@@ -71,8 +71,10 @@ class Baseline():
                     output_hidden_states=True
                 )
                 
-                embeddings = torch_outs['hidden_states'][-1].detach().cpu().numpy()
-                mean_sequence_embeddings = torch.sum(attention_mask.unsqueeze(-1)*embeddings, axis=-2)/torch.sum(attention_mask, axis=-1).unsqueeze(-1)
+                embeddings = torch_outs['hidden_states'][-1]
+                mean_sequence_embeddings = torch.sum(
+                    attention_mask.to(self.device).unsqueeze(-1)*embeddings, axis=-2)/\
+                        torch.sum(attention_mask.to(self.device), axis=-1).unsqueeze(-1)
                 return torch.nn.functional.normalize(mean_sequence_embeddings.squeeze(), dim=0).detach().cpu().numpy()
             
             elif self.option == "dna2bert":
@@ -86,8 +88,10 @@ class Baseline():
                     output_hidden_states=True,
                 )
 
-                embeddings = torch_outs[0].detach().cpu().numpy()
-                mean_sequence_embeddings = torch.sum(attention_mask.unsqueeze(-1)*embeddings, axis=-2)/torch.sum(attention_mask, axis=-1).unsqueeze(-1)
+                embeddings = torch_outs[0]
+                mean_sequence_embeddings = torch.sum(
+                    attention_mask.to(self.device).unsqueeze(-1)*embeddings, axis=-2)/\
+                        torch.sum(attention_mask.to(self.device), axis=-1).unsqueeze(-1)
                 return torch.nn.functional.normalize(mean_sequence_embeddings.squeeze(), dim=0).detach().cpu().numpy()
             
             else:

@@ -137,9 +137,7 @@ def bwamem_align_parallel(all_candidate_strings: list[str],
     except ValueError:
         return [], [], [], time.time() - total_time
     
-    override = False
-    if smallest_key == -2 * len(substring):
-        override = True
+
         
     smallest_values = refined_results[smallest_key]
     
@@ -155,5 +153,5 @@ def bwamem_align_parallel(all_candidate_strings: list[str],
     return  identified_sub_indices, \
             identified_indices, \
             metadata_indices, \
-            override, \
-            time.time() - total_time
+            time.time() - total_time, \
+            smallest_key
