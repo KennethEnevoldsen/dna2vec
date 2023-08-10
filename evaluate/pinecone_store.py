@@ -71,7 +71,7 @@ class PineconeStore:
                 name=index_name,
                 dimension=dimension,
                 metric=metric,
-                pod_type="s2.x8"
+                pod_type="s1.x4"
             )
 
         # now connect to the index

@@ -32,7 +32,7 @@ class EvalModel():
 
 class Baseline():
     def __init__(self, 
-                 option: Literal["dna2bert", "nucleotide-transformer"], 
+                 option: Literal["dna2bert-max", "dna2bert-mean", "nucleotide-transformer"], 
                  device: str = "cuda:1",
                  cache_dir: str = '/mnt/SSD2/pholur/dna2vec/baselines'):
         
@@ -41,7 +41,7 @@ class Baseline():
         self.device = device
         from transformers import AutoTokenizer, AutoModelForMaskedLM, AutoModel
         
-        if option == "dna2bert":
+        if option == "dna2bert-mean" or option == "dna2bert-max":
             self.tokenizer = AutoTokenizer.from_pretrained("zhihan1996/DNABERT-2-117M", trust_remote_code=True)
             self.model = AutoModel.from_pretrained("zhihan1996/DNABERT-2-117M", trust_remote_code=True)
             self.model.to(device)
@@ -77,7 +77,7 @@ class Baseline():
                         torch.sum(attention_mask.to(self.device), axis=-1).unsqueeze(-1)
                 return torch.nn.functional.normalize(mean_sequence_embeddings.squeeze(), dim=0).detach().cpu().numpy()
             
-            elif self.option == "dna2bert":
+            elif self.option == "dna2bert-mean":
                 tokens_ids = self.tokenizer(x, return_tensors = 'pt', padding=True)["input_ids"]
                 attention_mask = tokens_ids != self.tokenizer.pad_token_id
                 
@@ -94,12 +94,27 @@ class Baseline():
                         torch.sum(attention_mask.to(self.device), axis=-1).unsqueeze(-1)
                 return torch.nn.functional.normalize(mean_sequence_embeddings.squeeze(), dim=0).detach().cpu().numpy()
             
+            elif self.option == "dna2bert-max":
+                tokens_ids = self.tokenizer(x, return_tensors = 'pt', padding=True)["input_ids"]
+                attention_mask = tokens_ids != self.tokenizer.pad_token_id
+                
+                torch_outs = self.model(
+                    tokens_ids.to(self.device),
+                    attention_mask=attention_mask.to(self.device),
+                    encoder_attention_mask=attention_mask.to(self.device),
+                    output_hidden_states=True,
+                )
+
+                embeddings = torch_outs[0]
+                mean_sequence_embeddings = torch.max(
+                    attention_mask.to(self.device).unsqueeze(-1)*embeddings, axis=-2)
+                return torch.nn.functional.normalize(mean_sequence_embeddings.squeeze(), dim=0).detach().cpu().numpy()
             else:
                 raise NotImplementedError("Baseline Option undefined")
 
 
     def get_sentence_embedding_dimension(self):
-        if self.option == "dna2bert":
+        if self.option == "dna2bert-max" and self.option == "dna2bert-mean":
             return 768
         
         elif self.option == "nucleotide-transformer":
