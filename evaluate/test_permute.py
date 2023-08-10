@@ -207,7 +207,7 @@ if __name__ == "__main__":
             main(list_of_data_sources, 
                 store, 
                 config, 
-                top_k=args.topk, 
+                top_k=topk, 
                 edit_mode=args.mode, 
                 test_k = args.test_k, 
                 generalize=args.generalize)

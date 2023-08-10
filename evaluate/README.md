@@ -50,10 +50,15 @@ python test_permute.py
     --recipes               % <data recipe combinations>
     --checkpoints           % <model checkpoint>
     --mode                  % <permutation mode>
+    --generalize            % <smoothing factor>
+    --test_k                % <number of samples>
+    --topk                  % <set of topks>
+    --device                % <gpu>
 ```
 The additional argument `mode` specifies the type of permutation that is applied on the sequence.For example:
 ```bash
-python test_permute.py --recipes "all" --checkpoints "trained-all" --mode "random_sub" --generalize 25 --test_k 100 --topk 5
+python test_permute.py --recipes "all" --checkpoints "trained-all-longer" --mode "random_sub" --generalize 25 --t
+est_k 1000 --topk 5;25;50 --device "cuda:1"
 ```
 
 Results corresponding to these evaluations are deposited in `DATA_PATH`. You can visualize the results of these evaluations using the testbench `test_permutes.ipynb`.
