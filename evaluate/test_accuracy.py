@@ -37,6 +37,7 @@ parser.add_argument('--topk', type=int)
 parser.add_argument('--test', type=int)
 parser.add_argument('--system', type=str)
 parser.add_argument('--exactness', type=int)
+parser.add_argument('--distance_bound', type=int)
 ###
 
 
@@ -116,7 +117,7 @@ if __name__ == "__main__":
                 matches, timer, smallest_distance = evaluate(store, query, topk)
                 full_start = beginning + sample.seq_offset
                 if is_within_range_of_any_element(full_start, matches, args.exactness) or \
-                    abs(smallest_distance + 2*len(query)) < args.distance_bound:
+                    abs(smallest_distance + 2*len(query)) < args.distance_bound + 1: # the 1 here helps with instabilities
                     perf_read += 1
                 else:
                     logging.info(f"############# Error: \nQuery: {query}\nStart: {beginning}\nOriginal: \

@@ -3,7 +3,7 @@ from Bio import pairwise2
 from Bio.pairwise2 import format_alignment
 from Bio import Align
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 
 
 def calculate_smith_waterman_distance(  string1,
@@ -100,7 +100,7 @@ def bwamem_align(all_candidate_strings: list[str],
         identified_indices.append(term[1])
         metadata_indices.append(term[2])      
           
-    return identified_sub_indices, identified_indices, metadata_indices, total_time
+    return identified_sub_indices, identified_indices, metadata_indices, total_time, smallest_key
 
 
 def process_single_string(args:tuple):
@@ -139,6 +139,63 @@ def bwamem_align_parallel(all_candidate_strings: list[str],
     
 
         
+    smallest_values = refined_results[smallest_key]
+    
+    identified_sub_indices = []
+    identified_indices = []
+    metadata_indices = []
+    
+    for term in smallest_values:
+        identified_sub_indices.append(term[0])
+        identified_indices.append(term[1])
+        metadata_indices.append(term[2])      
+          
+    return  identified_sub_indices, \
+            identified_indices, \
+            metadata_indices, \
+            time.time() - total_time, \
+            smallest_key
+
+
+
+
+def process_batch(batch):
+    return [process_single_string(args) for args in batch]
+
+def bwamem_align_parallel_process(all_candidate_strings: list[str], 
+                          trained_positions: list[str], 
+                          metadata_set: list[str], 
+                          substring: str, 
+                          batch_size: int = 5,
+                          max_workers: int = 10
+):
+    total_time = time.time()
+    refined_results = defaultdict(list)
+
+    batches = [
+        batch for batch in zip(
+            all_candidate_strings, 
+            [substring] * len(all_candidate_strings), 
+            trained_positions, 
+            metadata_set
+        )
+    ]
+    
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        batch_results = list(executor.map(process_batch, [batches[i:i+batch_size] for i in range(0, len(batches), batch_size)]))
+
+    for batch_result in batch_results:
+        for results in batch_result:
+            distance, begins, train_pos, metadata, _ = results
+            for starting_sub_index in begins:
+                refined_results[distance].append(
+                    (starting_sub_index, train_pos, metadata)
+                )
+    
+    if not refined_results:
+        return [], [], [], time.time() - total_time
+        
+    smallest_key = min(refined_results.keys())
     smallest_values = refined_results[smallest_key]
     
     identified_sub_indices = []

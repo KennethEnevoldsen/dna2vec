@@ -3,7 +3,8 @@ initialized-with-one-step: "/mnt/SSD5/pholur/checkpoints/checkpoint_initalialize
 # trained-ch2-1000: "/mnt/SSD5/pholur/checkpoints/checkpoint_smooth-rock-29.pt"
 trained-ch2-1000: "/mnt/SSD5/pholur/checkpoints/checkpoint_amber-elevator-53.pt"
 trained-all: "/mnt/SSD2/pholur/General_Models/checkpoint_exalted-dew-60.pt"
-
-dna2bert: "Baseline"
+trained-all-longer: "/mnt/SSD5/pholur/checkpoints/checkpoint_major-flower-62.pt"
+dna2bert-mean: "Baseline"
+dna2bert-max: "Baseline"
 nucleotide-transformer: "Baseline"
 

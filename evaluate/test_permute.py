@@ -12,7 +12,7 @@ from helpers import pick_random_lines, initialize_pinecone, data_recipes, checkp
 import numpy as np
 from typing import Literal
 import random
-from aligners.smith_waterman import bwamem_align_parallel
+from aligners.smith_waterman import bwamem_align_parallel, bwamem_align, bwamem_align_parallel_process
 
 parser = argparse.ArgumentParser(description="Permute evaluate")
 parser.add_argument('--recipes', type=str)
@@ -116,8 +116,9 @@ def custom_random_sub(store, query, index, top_k, metadata, generalize):
                                                                                             metadata_set,
                                                                                             substring)
         
-        if int(index) + int(sub_index) in [int(tup[0]) + int(tup[1]) for tup in zip(identified_sub_indices, identified_indices)] or \
-            smallest_key == -2*len(query): # exact SW match
+        series = [int(tup[0]) + int(tup[1]) for tup in zip(identified_sub_indices, identified_indices)]
+        absolute_query = int(index) + int(sub_index)
+        if (absolute_query in series) or abs(smallest_key + 2*len(query)) < 1: # exact SW match
             finer_flag[0,start:start + generalize] = 1
         else:
             finer_flag[0,start:start + generalize] = 0
@@ -201,12 +202,13 @@ if __name__ == "__main__":
                 list_of_data_sources.append(data_recipes[source])
             else:
                 list_of_data_sources.append(source)
-                
-        main(list_of_data_sources, 
-             store, 
-             config, 
-             top_k=args.topk, 
-             edit_mode=args.mode, 
-             test_k = args.test_k, 
-             generalize=args.generalize)
+        
+        for topk in args.topk.split(";"):       
+            main(list_of_data_sources, 
+                store, 
+                config, 
+                top_k=args.topk, 
+                edit_mode=args.mode, 
+                test_k = args.test_k, 
+                generalize=args.generalize)
         # main(list_of_data_sources, store, config, top_k=50, edit_mode=args.mode, test_k = 1000, generalize=25)
