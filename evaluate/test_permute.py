@@ -20,7 +20,7 @@ parser.add_argument('--checkpoints', type=str)
 parser.add_argument('--mode', type=str)
 parser.add_argument('--generalize', type=int)
 parser.add_argument('--test_k', type=int)
-parser.add_argument("--topk", type=int)
+parser.add_argument("--topk", type=str)
 parser.add_argument("--device", type=str)
 
     
@@ -207,7 +207,7 @@ if __name__ == "__main__":
             main(list_of_data_sources, 
                 store, 
                 config, 
-                top_k=topk, 
+                top_k=int(topk), 
                 edit_mode=args.mode, 
                 test_k = args.test_k, 
                 generalize=args.generalize)
