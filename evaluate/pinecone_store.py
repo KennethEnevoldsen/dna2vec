@@ -133,12 +133,19 @@ class PineconeStore:
     def query(self, query, top_k=5):  # consider batching if slow
         # create the query vector
         xq = self.model.encode(query).tolist()
-
         # now query
         xc = self.index.query(xq, top_k=top_k, include_metadata=True)
-
         return xc
 
+    
+    def query_batch(self, query, top_k=5):  # consider batching if slow
+        # create the query vector
+        xq = self.model.encode(query).tolist()
+        # now query
+        xc = self.index.query(xq, top_k=top_k, include_metadata=True)
+        return xc
+    
+    
     def drop_table(self):  # times out for large data!
         pinecone.delete_index(self.index_name)
 

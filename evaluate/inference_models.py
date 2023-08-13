@@ -45,7 +45,8 @@ class Baseline():
             self.tokenizer = AutoTokenizer.from_pretrained("zhihan1996/DNABERT-2-117M", trust_remote_code=True)
             self.model = AutoModel.from_pretrained("zhihan1996/DNABERT-2-117M", trust_remote_code=True)
             self.model.to(device)
-        
+            self.model.eval()
+
         elif option == "nucleotide-transformer":
             self.tokenizer = AutoTokenizer.from_pretrained("InstaDeepAI/nucleotide-transformer-500m-human-ref")
             self.model = AutoModelForMaskedLM.from_pretrained("InstaDeepAI/nucleotide-transformer-500m-human-ref")
@@ -106,15 +107,15 @@ class Baseline():
                 )
 
                 embeddings = torch_outs[0]
-                mean_sequence_embeddings = torch.max(
+                max_sequence_embeddings = torch.max(
                     attention_mask.to(self.device).unsqueeze(-1)*embeddings, axis=-2)
-                return torch.nn.functional.normalize(mean_sequence_embeddings.squeeze(), dim=0).detach().cpu().numpy()
+                return torch.nn.functional.normalize(max_sequence_embeddings.values.squeeze(), dim=0).detach().cpu().numpy()
             else:
                 raise NotImplementedError("Baseline Option undefined")
 
 
     def get_sentence_embedding_dimension(self):
-        if self.option == "dna2bert-max" and self.option == "dna2bert-mean":
+        if self.option == "dna2bert-max" or self.option == "dna2bert-mean":
             return 768
         
         elif self.option == "nucleotide-transformer":
