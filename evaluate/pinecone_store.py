@@ -12,6 +12,8 @@ from tqdm import tqdm
 import random
 from inference_models import EvalModel, Baseline
 from typing import Optional
+import concurrent.futures
+
 
 class PineconeStore:
     def __init__(
@@ -138,12 +140,24 @@ class PineconeStore:
         return xc
 
     
-    def query_batch(self, query, top_k=5):  # consider batching if slow
+    def query_batch(self, queries, indices, top_k=5):  # consider batching if slow
         # create the query vector
-        xq = self.model.encode(query).tolist()
-        # now query
-        xc = self.index.query(xq, top_k=top_k, include_metadata=True)
-        return xc
+        xqs = self.model.encode(queries).tolist()
+        all_results = []
+        
+        def query_single(xq, query, index):
+            xc = self.index.query(xq, top_k=top_k, include_metadata=True)
+            xc["query"] = query
+            xc["index"] = index
+            return xc
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(query_single, xq, query, index) for xq, query, index in zip(xqs, queries, indices)]
+
+            for future in concurrent.futures.as_completed(futures):
+                all_results.append(future.result())
+
+        return all_results
     
     
     def drop_table(self):  # times out for large data!
