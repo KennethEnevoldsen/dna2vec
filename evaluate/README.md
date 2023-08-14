@@ -57,8 +57,9 @@ python test_permute.py
 ```
 The additional argument `mode` specifies the type of permutation that is applied on the sequence.For example:
 ```bash
-python test_permute.py --recipes "all" --checkpoints "trained-all-longer" --mode "random_sub" --generalize 25 --t
-est_k 1000 --topk 5;25;50 --device "cuda:1"
+python test_permute.py --recipes "all" --checkpoints "trained-all-longer" --mode "random_sub" --generalize 25 --test_k 1000 --topk 5;25;50 --device "cuda:1"
+
+python test_permute_fast.py --recipes "all" --checkpoints "trained-all-longer" --generalize 25 --test_k 1000 --topk 5;25;50 --device "cuda:1"
 ```
 
 Results corresponding to these evaluations are deposited in `DATA_PATH`. You can visualize the results of these evaluations using the testbench `test_permutes.ipynb`.
@@ -68,9 +69,24 @@ See `test_clustering.py` and `test_clustering.ipynb`.
 
 
 ### Step 4. Accuracy Computation
-Modify the parameter grid in `test_accuracy.py` and run the following:
+Ensure that Pinecone instances are running and the data is populated. Else go back to Step 2. To run accuracy computations at scale, run `test_accuracy.py` or `test_accuracy_fast.py`. Arguments:
 ```bash
-python test_accuracy.py --recipe "ch2" --checkpoints "trained-ch2-1000" --test 10000 --system "MSv3" 
+python test_accuracy.py 
+    --recipes               % <data recipe combinations>
+    --checkpoints           % <model checkpoint>
+    --test_k                % <number of samples>
+    --system                % <ART read generation system>
+    --exactness             % <How accurate should the indexing be? [useful for inexact matching]>
+    --distance_bound        % <How much distance tolerance can i have in a correct alignment [useful for inexact matching]>
+    --device                % <gpu>
+```
+
+Modify the parameter grid in `test_accuracy.py` and example commands are below:
+```bash
+python test_accuracy.py --recipe "ch2" --checkpoints "trained-ch2-1000" --test 10000 --system "MSv3" --exactness 10 --distance_bound 10
+
+python test_accuracy_fast.py --recipe "all" --checkpoints "trained-all_longer" --test 10000 --system "MSv3" --exactness 50 --distance_bound 10
+
 ```
 
 ## Setting up reference baselines
