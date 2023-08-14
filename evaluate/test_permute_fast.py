@@ -79,8 +79,7 @@ def main(paths:list,
         start += generalize
 
                 
-        np.savez_compressed(f"test_cache/permute/final_\
-    {config}_{test_k}_{top_k}_{generalize}.npz", finer = finer_flags)
+        np.savez_compressed(f"test_cache/permute/run_{config}_{test_k}_{top_k}_{generalize}.npz", finer = finer_flags)
                 
 
 
