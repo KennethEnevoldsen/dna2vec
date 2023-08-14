@@ -8,7 +8,7 @@ import yaml
 import argparse
 from pinecone_store import PineconeStore
 from dna2vec.model import model_from_config
-from helpers import pick_random_lines, initialize_pinecone, data_recipes, checkpoints
+from helpers import pick_random_lines, initialize_pinecone, data_recipes, checkpoints, main_align
 import numpy as np
 from typing import Literal
 import random
@@ -30,40 +30,6 @@ def identify_random_subsequence(query, length):
     start_index = random.randint(0, len(query) - length)  # Generate a random starting index within the valid range
     end_index = start_index + length  # Calculate the end index
     return start_index, query[start_index:end_index]
-
-
-
-import time
-def main_align(store, 
-                queries, 
-                indices, 
-                top_k):
-    
-    
-    finer_flag = np.zeros((len(queries), 1))
-    returned = store.query_batch(queries, indices, top_k=top_k)
-    
-    for i,returned_unit in enumerate(returned): # can potentially be shuffled but that's okay
-        returned_unit_matched = returned_unit["matches"]
-        trained_positions = [sample["metadata"]["position"] for sample in returned_unit_matched]
-        metadata_set = [sample["metadata"]["metadata"] for sample in returned_unit_matched]
-        
-        all_candidate_strings = [sample["metadata"]["text"] for sample in returned_unit_matched]
-        
-        identified_sub_indices, identified_indices, _, timer, smallest_key = bwamem_align_parallel(
-                                                                                            all_candidate_strings, 
-                                                                                            trained_positions, 
-                                                                                            metadata_set,
-                                                                                            returned_unit["query"])
-        
-        series = [int(tup[0]) + int(tup[1]) for tup in zip(identified_sub_indices, identified_indices)]
-
-        if (returned_unit["index"] in series) or abs(smallest_key + 2*len(returned_unit["query"])) < 1: # exact SW match
-            finer_flag[i,0] = 1
-        else:
-            finer_flag[i,0] = 0
-
-    return finer_flag
 
 
 
@@ -113,8 +79,8 @@ def main(paths:list,
         start += generalize
 
                 
-    np.savez_compressed(f"test_cache/permute/final_\
-{config}_{test_k}_{top_k}_{generalize}.npz", finer = finer_flags)
+        np.savez_compressed(f"test_cache/permute/final_\
+    {config}_{test_k}_{top_k}_{generalize}.npz", finer = finer_flags)
                 
 
 

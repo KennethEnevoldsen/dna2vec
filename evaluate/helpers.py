@@ -1,7 +1,9 @@
 import random
 import yaml
+import numpy as np
 
 from pinecone_store import PineconeStore
+from aligners.smith_waterman import bwamem_align, bwamem_align_parallel
 
 from alignment_metrics import calculate_smith_waterman_distance
 from collections import defaultdict
@@ -22,6 +24,53 @@ with open("configs/model_checkpoints.yaml", 'r') as stream:
     
 with open("configs/raw.yaml", 'r') as stream:
     raw_fasta_files = yaml.safe_load(stream)
+
+
+
+
+
+import time
+def main_align(store, 
+                queries, 
+                indices, 
+                top_k,
+                exactness=0,
+                distance_bound=0,
+                flex=False):
+    
+    
+    finer_flag = np.zeros((len(queries), 1))
+    returned = store.query_batch(queries, indices, top_k=top_k)
+    
+    for i,returned_unit in enumerate(returned): # can potentially be shuffled but that's okay
+        returned_unit_matched = returned_unit["matches"]
+        trained_positions = [sample["metadata"]["position"] for sample in returned_unit_matched]
+        metadata_set = [sample["metadata"]["metadata"] for sample in returned_unit_matched]
+        
+        all_candidate_strings = [sample["metadata"]["text"] for sample in returned_unit_matched]
+        
+        identified_sub_indices, identified_indices, _, timer, smallest_distance = bwamem_align_parallel(
+                                                                                            all_candidate_strings, 
+                                                                                            trained_positions, 
+                                                                                            metadata_set,
+                                                                                            returned_unit["query"])
+        
+        series = [int(tup[0]) + int(tup[1]) for tup in zip(identified_sub_indices, identified_indices)]
+
+        if flex:
+            if is_within_range_of_any_element(returned_unit["index"], series, exactness) or \
+                    abs(smallest_distance + 2*len(returned_unit["query"])) < distance_bound + 1: # the 1 here helps with instabilities
+                finer_flag[i,0] = 1
+            else:
+                finer_flag[i,0] = 0
+        else:
+            if (returned_unit["index"] in series) or abs(smallest_distance + 2*len(returned_unit["query"])) < 1: # exact SW match
+                finer_flag[i,0] = 1
+            else:
+                finer_flag[i,0] = 0
+
+    return finer_flag
+
 
 
 
