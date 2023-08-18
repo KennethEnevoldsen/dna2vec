@@ -20,11 +20,13 @@ import os
 os.environ["DNA2VEC_CACHE_DIR"] = "/mnt/SSD2/pholur/dna2vec"
 
 grid = {
-    "read_length": [500, 250], #[150, 300, 500],
-    "insertion_rate": [0.0, 0.00009, 0.0009, 0.009],
-    "deletion_rate" : [0.0, 0.00011, 0.0011, 0.011],
-    "qq": [(60,80), (40,60), (20,40)],
-    "topk": [5, 25, 50]
+    "read_length": [250], #[150, 300, 500],
+    "insertion_rate": [0.0, 0.0001, 0.01],
+    "deletion_rate" : [0.0, 0.0001, 0.01],
+    "qq": [(60,90), (30,60)], # https://www.illumina.com/documents/products/technotes/technote_Q-Scores.pdf
+    "topk": [5, 25, 50],
+    "distance_bound": [0, 10, 20],
+    "exactness": [10]
 }
 
 
@@ -36,8 +38,6 @@ parser.add_argument('--checkpoints', type=str)
 parser.add_argument('--topk', type=int)
 parser.add_argument('--test', type=int)
 parser.add_argument('--system', type=str)
-parser.add_argument('--exactness', type=int)
-parser.add_argument('--distance_bound', type=int)
 parser.add_argument('--device', type=str)
 ###
 
@@ -65,7 +65,7 @@ if __name__ == "__main__":
     for arg in vars(args):
         f.write(f"# {arg}: {getattr(args, arg)}\nqqq")
         
-    f.write("Quality,Read length,Insertion rate,Deletion rate,TopK,Accuracy\n")
+    f.write("Quality,Read length,Insertion rate,Deletion rate,TopK,Distance bound,Exactness,Accuracy\n")
     f.flush()
     
     for arg in vars(args):
@@ -73,8 +73,11 @@ if __name__ == "__main__":
         
     for (store, _, _) in initialize_pinecone(checkpoint_queue, data_queue, args.device):
         
-        for read_length, insertion_rate, deletion_rate, quality, topk in \
-            product(grid["read_length"], grid["insertion_rate"], grid["deletion_rate"], grid["qq"], grid["topk"]):
+        for read_length, insertion_rate, deletion_rate, quality, \
+            topk, distance_bound, exactness in \
+            product(grid["read_length"], grid["insertion_rate"], 
+                    grid["deletion_rate"], grid["qq"], grid["topk"], 
+                    grid["distance_bound"], grid["exactness"]):
 
             perf_read = 0
             perf_true = 0
@@ -83,7 +86,7 @@ if __name__ == "__main__":
             queries = []
             small_indices = []
             start_indices = []
-            
+
             mapped_reads = simulate_mapped_reads(
                 n_reads_pr_amplicon=args.test,
                 read_length=read_length,
@@ -93,18 +96,18 @@ if __name__ == "__main__":
                 sequencing_system=args.system,
                 quality = quality
             )
-            
+
             for sample in tqdm(mapped_reads):
                 queries.append(sample.read.query_sequence)
-                small_indices.append(int(sample.read.reference_start_))
+                small_indices.append(int(sample.read.reference_start))
                 start_indices.append(int(sample.seq_offset))
-            
+
             ground_truth = [index_main + inter_fine for index_main, inter_fine in zip(start_indices, small_indices)]    
-            results = main_align(store, queries, ground_truth, topk, exactness=args.exactness, distance_bound=args.distance_bound, flex = True)
+            results = main_align(store, queries, ground_truth, topk, 
+                                 exactness=exactness, distance_bound=distance_bound, 
+                                 flex = True)
             total_perf = np.mean(results)
-            f.write(f"{str(quality).replace(',',';')},{read_length},{insertion_rate},{deletion_rate},{topk},{total_perf}\n")
+            print(f"{str(quality).replace(',',';')},{read_length},{insertion_rate},{deletion_rate},{topk},{distance_bound},{exactness},{total_perf}\n")
+            f.write(f"{str(quality).replace(',',';')},{read_length},{insertion_rate},{deletion_rate},{topk},{distance_bound},{exactness},{total_perf}\n")
             f.flush()
-                        
     f.close()
-                        
-                    

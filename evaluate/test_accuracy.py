@@ -20,11 +20,13 @@ import os
 os.environ["DNA2VEC_CACHE_DIR"] = "/mnt/SSD2/pholur/dna2vec"
 
 grid = {
-    "read_length": [250, 500], #[150, 300, 500],
-    "insertion_rate": [0.0, 0.00009, 0.0009, 0.009],
-    "deletion_rate" : [0.0, 0.00011, 0.0011, 0.011],
-    "qq": [(60,80), (20,40), (40,60)],
-    "topk": [5, 25, 50]
+    "read_length": [250], #[150, 300, 500],
+    "insertion_rate": [0.0, 0.0001, 0.01],
+    "deletion_rate" : [0.0, 0.0001, 0.01],
+    "qq": [(60,90), (30,60)], # https://www.illumina.com/documents/products/technotes/technote_Q-Scores.pdf
+    "topk": [5, 25, 50],
+    "distance_bound": [0, 10, 20],
+    "exactness": [10]
 }
 
 
@@ -36,8 +38,7 @@ parser.add_argument('--checkpoints', type=str)
 parser.add_argument('--topk', type=int)
 parser.add_argument('--test', type=int)
 parser.add_argument('--system', type=str)
-parser.add_argument('--exactness', type=int)
-parser.add_argument('--distance_bound', type=int)
+parser.add_argument('--device', type=str)
 ###
 
 
