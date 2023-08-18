@@ -110,7 +110,7 @@ def custom_random_sub(store, query, index, top_k, metadata, generalize):
         
         all_candidate_strings = [sample["metadata"]["text"] for sample in returned]
         
-        identified_sub_indices, identified_indices, _, timer, smallest_key = bwamem_align_parallel(
+        identified_sub_indices, identified_indices, _, timer, smallest_key = bwamem_align(
                                                                                             all_candidate_strings, 
                                                                                             trained_positions, 
                                                                                             metadata_set,
@@ -208,7 +208,6 @@ if __name__ == "__main__":
                 store, 
                 config, 
                 top_k=int(topk), 
-                edit_mode=args.mode, 
                 test_k = args.test_k, 
                 generalize=args.generalize)
         # main(list_of_data_sources, store, config, top_k=50, edit_mode=args.mode, test_k = 1000, generalize=25)

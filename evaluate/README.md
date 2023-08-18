@@ -76,17 +76,14 @@ python test_accuracy.py
     --checkpoints           % <model checkpoint>
     --test_k                % <number of samples>
     --system                % <ART read generation system>
-    --exactness             % <How accurate should the indexing be? [useful for inexact matching]>
-    --distance_bound        % <How much distance tolerance can i have in a correct alignment [useful for inexact matching]>
     --device                % <gpu>
 ```
 
 Modify the parameter grid in `test_accuracy.py` and example commands are below:
 ```bash
-python test_accuracy.py --recipe "ch2" --checkpoints "trained-ch2-1000" --test 10000 --system "MSv3" --exactness 10 --distance_bound 10
+python test_accuracy.py --recipe "ch2" --checkpoints "trained-ch2-1000" --test 5000 --system "MSv3"
 
-python test_accuracy_fast.py --recipe "all" --checkpoints "trained-all_longer" --test 10000 --system "MSv3" --exactness 50 --distance_bound 10
-
+python test_accuracy_fast.py --recipe "all" --checkpoints "trained-all_longer" --test 10000 --system "MSv3" 
 ```
 
 ## Setting up reference baselines
