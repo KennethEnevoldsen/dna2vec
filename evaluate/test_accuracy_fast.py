@@ -63,7 +63,7 @@ if __name__ == "__main__":
     f = open(Path(os.environ["DNA2VEC_CACHE_DIR"]) / "Results" / f"result_{formatted_date}.csv", "w+")
         
     for arg in vars(args):
-        f.write(f"# {arg}: {getattr(args, arg)}\nqqq")
+        f.write(f"# {arg}: {getattr(args, arg)}\n")
         
     f.write("Quality,Read length,Insertion rate,Deletion rate,TopK,Distance bound,Exactness,Accuracy\n")
     f.flush()
