@@ -1,3 +1,8 @@
+import os
+os.environ["DNA2VEC_CACHE_DIR"] = "/mnt/SSD2/pholur/dna2vec"
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
+
 from helpers import raw_fasta_files
 import numpy as np
 from tqdm import tqdm
@@ -16,16 +21,13 @@ from dna2vec.simulate import simulate_mapped_reads
 
 from pinecone_store import PineconeStore
 
-import os
-os.environ["DNA2VEC_CACHE_DIR"] = "/mnt/SSD2/pholur/dna2vec"
-
 grid = {
     "read_length": [250], #[150, 300, 500],
-    "insertion_rate": [0.0, 0.0001, 0.01],
-    "deletion_rate" : [0.0, 0.0001, 0.01],
+    "insertion_rate": [0.0, 0.01],
+    "deletion_rate" : [0.0, 0.01],
     "qq": [(60,90), (30,60)], # https://www.illumina.com/documents/products/technotes/technote_Q-Scores.pdf
-    "topk": [5, 25, 50],
-    "distance_bound": [0, 10, 20],
+    "topk": [50, 100],
+    "distance_bound": [50, 25, 0],
     "exactness": [10]
 }
 
@@ -72,13 +74,17 @@ if __name__ == "__main__":
         logging.info(f"{arg}: {getattr(args, arg)}")
         
     for (store, _, _) in initialize_pinecone(checkpoint_queue, data_queue, args.device):
-        
+        i = 0
         for read_length, insertion_rate, deletion_rate, quality, \
             topk, distance_bound, exactness in \
             product(grid["read_length"], grid["insertion_rate"], 
                     grid["deletion_rate"], grid["qq"], grid["topk"], 
                     grid["distance_bound"], grid["exactness"]):
 
+            if i < 6:
+                i += 1
+                continue
+            
             perf_read = 0
             perf_true = 0
             count = 0
