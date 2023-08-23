@@ -165,7 +165,7 @@ def is_within_range_of_any_element(X: int, Y: list, Z: int):
 
 def initialize_pinecone(checkpoint_queue: list[str], 
                         data_queue: list[str], 
-                        device:str="cuda:0"
+                        device:str
 ):
     
     import torch
@@ -173,7 +173,7 @@ def initialize_pinecone(checkpoint_queue: list[str],
     for alias in checkpoint_queue:
         
         if alias in checkpoints and checkpoints[alias] != "Baseline":
-            received = torch.load(checkpoints[alias])
+            received = torch.load(checkpoints[alias], map_location="cpu")
             config = received["config"]
             config.model_config.tokenizer_path = checkpoints["tokenizer"]
             encoder, pooling, tokenizer = model_from_config(config.model_config)

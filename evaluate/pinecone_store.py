@@ -39,7 +39,7 @@ class PineconeStore:
                 model_params["pooling"],
                 device = device
             )
-        
+
         if "config-" in index_name: # premium account
             self.api_key = "ded0a046-d0fe-4f8a-b45c-1d6274ad555e"
             self.environment = "us-west4-gcp"
@@ -185,7 +185,7 @@ if __name__ == "__main__":
     random.seed(42)
 
     pinecone_obj = PineconeStore(
-        device="cuda:4", 
+        device="cuda:3", 
         index_name=args.indexname
     )
 

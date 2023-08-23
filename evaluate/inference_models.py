@@ -13,14 +13,14 @@ class EvalModel():
         self.model = model
         
         self.pooling = pooling
-        self.pooling.to(device)
+        self.pooling = self.pooling.to(device)
         
-        self.model.to(device)
+        self.model = self.model.to(device)
         self.device = device
         
         self.model.eval()
     
-    def encode(self, x: str):
+    def encode(self, x: list):
         with torch.no_grad():
             input_data = self.tokenizer.tokenize(x).to_torch()
             last_hidden_state = self.model(input_ids = input_data["input_ids"].to(self.device), 
@@ -33,7 +33,7 @@ class EvalModel():
 class Baseline():
     def __init__(self, 
                  option: Literal["dna2bert-max", "dna2bert-mean", "nucleotide-transformer"], 
-                 device: str = "cuda:1",
+                 device: str,
                  cache_dir: str = '/mnt/SSD2/pholur/dna2vec/baselines'):
         
         import os
