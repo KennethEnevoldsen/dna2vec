@@ -48,7 +48,8 @@ def main(paths:list,
     for path in paths:
         test_lines.extend(pick_random_lines(path, per_samples))
     
-    finer_flags = np.zeros((test_k, len(test_lines[0]["text"])))   
+    #finer_flags = np.zeros((test_k, len(test_lines[0]["text"])))   
+    finer_flags = np.zeros((test_k, test_k))   
 
     start = 0
     for k in tqdm(range(1, (len(test_lines) // generalize) + 1)):
@@ -75,7 +76,7 @@ def main(paths:list,
                             full_indices, 
                             top_k)
         
-        finer_flags[:,start:start+generalize] = finer_flag
+        finer_flags[:,start:start+generalize] = finer_flag.reshape(-1,1)
         start += generalize
 
                 
