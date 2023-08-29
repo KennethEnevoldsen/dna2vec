@@ -29,6 +29,22 @@ from tqdm import tqdm
 
 
 
+
+
+import scipy.stats as stats
+
+def clopper_pearson_interval(successes, trials, confidence_level=0.95):
+    alpha = 1 - confidence_level
+    
+    lower_bound = stats.beta.ppf(alpha / 2, successes, trials - successes + 1)
+    upper_bound = stats.beta.ppf(1 - alpha / 2, successes + 1, trials - successes)
+    
+    return lower_bound, upper_bound
+
+
+
+
+
 import time
 # def main_align(store, 
 #                 queries, 

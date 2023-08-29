@@ -75,22 +75,6 @@ if __name__ == "__main__":
     
     now = datetime.now()
     formatted_date = now.strftime("%Y_%m_%d_%H_%M_%S")
-
-    logging.basicConfig(filename = Path(os.environ["DNA2VEC_CACHE_DIR"]) / "Logs" / f"log_{formatted_date}", 
-                        level=logging.INFO)
-    
-    logging.info("Parameters:")
-    
-    f = open(Path(os.environ["DNA2VEC_CACHE_DIR"]) / "Results" / f"result_{formatted_date}.csv", "w+")
-        
-    for arg in vars(args):
-        f.write(f"# {arg}: {getattr(args, arg)}\nqqq")
-        
-    f.write("Quality,Read length,Insertion rate,Deletion rate,TopK,Accuracy\n")
-    f.flush()
-    
-    for arg in vars(args):
-        logging.info(f"{arg}: {getattr(args, arg)}")
         
     for (store, _, _) in initialize_pinecone(checkpoint_queue, data_queue, args.device):
         
@@ -120,15 +104,10 @@ if __name__ == "__main__":
                 if is_within_range_of_any_element(full_start, matches, args.exactness) or \
                     abs(smallest_distance + 2*len(query)) < args.distance_bound + 1: # the 1 here helps with instabilities
                     perf_read += 1
-                else:
-                    logging.info(f"############# Error: \nQuery: {query}\nStart: {beginning}\nOriginal: \
-{sample.reference}\nMatches: {matches}\n{str(quality).replace(',',';')},{read_length},{insertion_rate},\
-{deletion_rate},{topk},{perf_read/(count+0.0001)} \n #############") 
                 count += 1
             
-            f.write(f"{str(quality).replace(',',';')},{read_length},{insertion_rate},{deletion_rate},{topk},{perf_read/count}\n")
-            f.flush()
-                        
-    f.close()
+            print(perf_read/(count+0.0001))
+            exit()
+
                         
                     
