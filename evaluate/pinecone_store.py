@@ -115,7 +115,7 @@ class PineconeStore:
         for file_path in file_paths:
             batches = PineconeStore.batched_data_generator(file_path, batch_size)
 
-            for batch in tqdm(batches):
+            for bi, batch in tqdm(enumerate(batches)):
                 ids = [PineconeStore.generate_random_string() for _ in range(len(batch))]
 
                 # create metadata batch - we can add context here

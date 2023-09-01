@@ -162,10 +162,15 @@ class Baseline():
                 tok_seq = self.tokenizer(x)
                 tok_seq = tok_seq["input_ids"]  # grab ids
                 
+                attention_mask = torch.zeros((len(tok_seq), 1252)) + 1
+                for i,s in enumerate(tok_seq):
+                    if len(s) < 1252: # VERY MUCH AN EDGE CASE - 1 in a million chance. Due to chromosome cuts.
+                        attention_mask[i][len(s):1252] = 0
+                        s.extend([4]*(1252 - len(s)))
+
                 # place on device, convert to tensor
                 tok_seq = torch.LongTensor(tok_seq) #.unsqueeze(0)  # unsqueeze for batch dim
                 tok_seq = tok_seq.to(self.device)
-                attention_mask = torch.zeros_like(tok_seq)
 
                 # prep model and forward
                 with torch.inference_mode():
@@ -180,10 +185,15 @@ class Baseline():
                 tok_seq = self.tokenizer(x)
                 tok_seq = tok_seq["input_ids"]  # grab ids
 
+                attention_mask = torch.zeros((len(tok_seq), 1252)) + 1
+                for i,s in enumerate(tok_seq):
+                    if len(s) < 1252: # VERY MUCH AN EDGE CASE - 1 in a million chance. Due to chromosome cuts.
+                        attention_mask[i][len(s):1252] = 0
+                        s.extend([4]*(1252 - len(s)))
+
                 # place on device, convert to tensor
                 tok_seq = torch.LongTensor(tok_seq) #.unsqueeze(0)  # unsqueeze for batch dim
                 tok_seq = tok_seq.to(self.device)
-                attention_mask = torch.zeros_like(tok_seq)
 
                 # prep model and forward
                 with torch.inference_mode():

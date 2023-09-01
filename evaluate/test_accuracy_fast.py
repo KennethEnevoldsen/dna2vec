@@ -80,10 +80,6 @@ if __name__ == "__main__":
             product(grid["read_length"], grid["insertion_rate"], 
                     grid["deletion_rate"], grid["qq"], grid["topk"], 
                     grid["distance_bound"], grid["exactness"]):
-
-            if i < 6:
-                i += 1
-                continue
             
             perf_read = 0
             perf_true = 0

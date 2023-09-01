@@ -9,3 +9,5 @@ chimp2B: "/mnt/SSD2/pholur/General_Models/data/chimp_2b/chimp_2b.fasta"
 
 rat1: "/mnt/SSD2/pholur/General_Models/data/rat1/rat1.fasta"
 rat2: "/mnt/SSD2/pholur/General_Models/data/rat2/rat2.fasta"
+
+ch23Y: "/mnt/SSD2/pholur/General_Models/data/chr23Y/chr23Y.fasta"

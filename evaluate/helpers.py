@@ -97,24 +97,27 @@ def main_align(store,
                 exactness=0,
                 distance_bound=0,
                 flex=False,
-                batch_size=64):
+                batch_size=64,
+                match=True):
 
     num_queries = len(queries)
     finer_flag = np.zeros((num_queries, 1))
-    print(num_queries)
+
     for batch_start in tqdm(range(0, num_queries, batch_size)):
         batch_end = min(batch_start + batch_size, num_queries)
         batch_queries = queries[batch_start:batch_end]
         
+        
         returned = store.query_batch(batch_queries, indices, top_k=top_k)
 
         for i, returned_unit in enumerate(returned):
+            
             returned_unit_matched = returned_unit["matches"]
             trained_positions = [sample["metadata"]["position"] for sample in returned_unit_matched]
             metadata_set = [sample["metadata"]["metadata"] for sample in returned_unit_matched]
             all_candidate_strings = [sample["metadata"]["text"] for sample in returned_unit_matched]
             
-            identified_sub_indices, identified_indices, _, timer, smallest_distance = bwamem_align_parallel(
+            identified_sub_indices, identified_indices, meta_retrieve, timer, smallest_distance = bwamem_align_parallel(
                 all_candidate_strings, 
                 trained_positions, 
                 metadata_set,
@@ -122,14 +125,15 @@ def main_align(store,
             
             series = [int(tup[0]) + int(tup[1]) for tup in zip(identified_sub_indices, identified_indices)]
             if flex:
-                if is_within_range_of_any_element(returned_unit["index"], series, exactness) or \
+                if (is_within_range_of_any_element(returned_unit["index"], series, exactness) and match) or \
                     abs(smallest_distance + 2 * len(returned_unit["query"])) < distance_bound + 1:
                     finer_flag[batch_start + i, 0] = 1
                 else:
                     finer_flag[batch_start + i, 0] = 0
             else:
-                if (returned_unit["index"] in series) or abs(smallest_distance + 2 * len(returned_unit["query"])) < 1:
-                    finer_flag[batch_start + i, 0] = 1
+                if ((returned_unit["index"] in series) and match) or \
+                    abs(smallest_distance + 2 * len(returned_unit["query"])) < 1:
+                        finer_flag[batch_start + i, 0] = 1
                 else:
                     finer_flag[batch_start + i, 0] = 0
 
