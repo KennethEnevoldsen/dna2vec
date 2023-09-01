@@ -35,7 +35,7 @@ def identify_random_subsequence(query, length):
 
 
 def main(paths:list,
-         store: PineconeStore = None,
+         stores: PineconeStore = None,
          config: str = None,
          test_k: int = 200,
          top_k: int = 50,
@@ -43,25 +43,21 @@ def main(paths:list,
 ):
     
     per_samples = test_k // len(paths)
-    test_lines = []
+    test_lines = {}
     
     for path in paths:
-        test_lines.extend(pick_random_lines(path, per_samples))
+        test_lines.append(pick_random_lines(path, per_samples))
     
-    #finer_flags = np.zeros((test_k, len(test_lines[0]["text"])))   
-    finer_flags = np.zeros((test_k, test_k))   
-
-    start = 0
-    for k in tqdm(range(1, (len(test_lines) // generalize) + 1)):
+    for i,sub_test_lines in enumerate(test_lines):
         
         sub_indices = []
         queries = []
         indices = []
         
-        for i,line in enumerate(test_lines):
+        for _,line in enumerate(sub_test_lines):
             
             query = line["text"]
-            index = line["position"]
+            index = line["position"] # these positions are relative to that data source
             
             sub_index, substring = identify_random_subsequence(
                                     query, 250) #min(generalize*k, len(query)))
@@ -69,20 +65,23 @@ def main(paths:list,
             queries.append(substring)
             indices.append(index)
             
-            
+        all_matches = None    
         full_indices = [int(ind_base) + int(ind_fine) for ind_base, ind_fine in zip(indices, sub_indices)]
-        finer_flag = main_align(store, 
-                            queries, 
-                            full_indices, 
-                            top_k)
-
-        print("Custom perf: ", sum(finer_flag) / len(finer_flag))
-        exit()
         
-        # finer_flags[:,start:start+generalize] = finer_flag.reshape(-1,1)
-        # start += generalize
-        # np.savez_compressed(f"test_cache/permute/run_{config}_{test_k}_{top_k}_{generalize}.npz", finer = finer_flags)
-                
+        for j,store in enumerate(stores):
+            finer_flag = main_align(store, 
+                                queries, 
+                                full_indices, 
+                                top_k,
+                                match=i==j)
+            
+            if all_matches is None:
+                all_matches = finer_flag
+            else:
+                all_matches += finer_flag
+
+        print("Custom perf: ", np.count_nonzero(all_matches) / len(all_matches))
+        exit()
 
 
 
@@ -90,23 +89,24 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     
-    data_queue = args.recipes.split(";")
+    data_alias = args.recipes
     checkpoint_queue = args.checkpoints.split(";")
+    list_of_data_sources = []
+    data_queue = args.recipes.split(";")
     
-    for (store, data_alias, config) in initialize_pinecone(checkpoint_queue, data_queue, args.device):
-        list_of_data_sources = []
-        sources = data_alias.split(",")
-        for source in sources:
-            if source in data_recipes:
-                list_of_data_sources.append(data_recipes[source])
-            else:
-                list_of_data_sources.append(source)
+    stores = [store for (store, _, _) in initialize_pinecone(checkpoint_queue, data_queue, args.device)]
+    
+    sources = data_queue
+    for source in sources:
+        if source in data_recipes:
+            list_of_data_sources.append(data_recipes[source])
+        else:
+            list_of_data_sources.append(source)
         
-        for topk in args.topk.split(";"):       
-            main(list_of_data_sources, 
-                store, 
-                config, 
-                top_k=int(topk), 
-                test_k = args.test_k, 
-                generalize=args.generalize)
-        # main(list_of_data_sources, store, config, top_k=50, edit_mode=args.mode, test_k = 1000, generalize=25)
+    for topk in args.topk.split(";"):       
+        main(list_of_data_sources, 
+            stores, 
+            None, 
+            top_k=int(topk), 
+            test_k = args.test_k, 
+            generalize=args.generalize)

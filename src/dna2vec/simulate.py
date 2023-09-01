@@ -207,22 +207,22 @@ def simulate_mapped_reads(
     
     output_path.mkdir(parents=True, exist_ok=True)
 
-    if not output_path.with_suffix(".sam").exists():
-        simulated_reads = simulate_reads_to_disk(
-            n_reads_pr_amplicon=n_reads_pr_amplicon,
-            read_length=read_length,
-            output_path=output_path,
-            reference_genome=reference_genome,
-            insertion_rate=insertion_rate,
-            deletion_rate=deletion_rate,
-            sequencing_system=sequencing_system,
-            quality=quality
-        )
-    else:
-        logging.info(
-            f"Simulated reads already exists at {output_path}. Loading from disk."
-        )
-        simulated_reads = output_path
+    #if not output_path.with_suffix(".sam").exists():
+    simulated_reads = simulate_reads_to_disk(
+        n_reads_pr_amplicon=n_reads_pr_amplicon,
+        read_length=read_length,
+        output_path=output_path,
+        reference_genome=reference_genome,
+        insertion_rate=insertion_rate,
+        deletion_rate=deletion_rate,
+        sequencing_system=sequencing_system,
+        quality=quality
+    )
+    # else:
+    #     logging.info(
+    #         f"Simulated reads already exists at {output_path}. Loading from disk."
+    #     )
+    #     simulated_reads = output_path
 
 
     mapped_reads = map_reads_to_reference(
