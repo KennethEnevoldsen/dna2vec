@@ -98,46 +98,94 @@ def main_align(store,
                 distance_bound=0,
                 flex=False,
                 batch_size=64,
-                match=True):
+                match=True,
+                distributed=False,
+                per_k=0,
+                namespaces=None,
+                namespace_dict=None):
 
-    num_queries = len(queries)
-    finer_flag = np.zeros((num_queries, 1))
-
-    for batch_start in tqdm(range(0, num_queries, batch_size)):
-        batch_end = min(batch_start + batch_size, num_queries)
-        batch_queries = queries[batch_start:batch_end]
+    if not distributed:
         
-        
-        returned = store.query_batch(batch_queries, indices, top_k=top_k)
+        num_queries = len(queries)
+        finer_flag = np.zeros((num_queries, 1))
 
-        for i, returned_unit in enumerate(returned):
+        for batch_start in tqdm(range(0, num_queries, batch_size)):
+            batch_end = min(batch_start + batch_size, num_queries)
+            batch_queries = queries[batch_start:batch_end]
+            batch_indices = indices[batch_start:batch_end]
             
-            returned_unit_matched = returned_unit["matches"]
-            trained_positions = [sample["metadata"]["position"] for sample in returned_unit_matched]
-            metadata_set = [sample["metadata"]["metadata"] for sample in returned_unit_matched]
-            all_candidate_strings = [sample["metadata"]["text"] for sample in returned_unit_matched]
-            
-            identified_sub_indices, identified_indices, meta_retrieve, timer, smallest_distance = bwamem_align_parallel(
-                all_candidate_strings, 
-                trained_positions, 
-                metadata_set,
-                returned_unit["query"])
-            
-            series = [int(tup[0]) + int(tup[1]) for tup in zip(identified_sub_indices, identified_indices)]
-            if flex:
-                if (is_within_range_of_any_element(returned_unit["index"], series, exactness) and match) or \
-                    abs(smallest_distance + 2 * len(returned_unit["query"])) < distance_bound + 1:
-                    finer_flag[batch_start + i, 0] = 1
-                else:
-                    finer_flag[batch_start + i, 0] = 0
-            else:
-                if ((returned_unit["index"] in series) and match) or \
-                    abs(smallest_distance + 2 * len(returned_unit["query"])) < 1:
+            returned = store.query_batch(batch_queries, batch_indices, top_k=top_k) #1
+
+            for i, returned_unit in enumerate(returned):
+                
+                returned_unit_matched = returned_unit["matches"]
+                trained_positions = [sample["metadata"]["position"] for sample in returned_unit_matched]
+                metadata_set = [sample["metadata"]["metadata"] for sample in returned_unit_matched]
+                all_candidate_strings = [sample["metadata"]["text"] for sample in returned_unit_matched]
+                
+                identified_sub_indices, identified_indices, meta_retrieve, timer, smallest_distance = bwamem_align_parallel(
+                    all_candidate_strings, 
+                    trained_positions, 
+                    metadata_set,
+                    returned_unit["query"])
+                
+                series = [int(tup[0]) + int(tup[1]) for tup in zip(identified_sub_indices, identified_indices)]
+                if flex:
+                    if (is_within_range_of_any_element(returned_unit["index"], series, exactness) and match) or \
+                        abs(smallest_distance + 2 * len(returned_unit["query"])) < distance_bound + 1:
                         finer_flag[batch_start + i, 0] = 1
+                    else:
+                        finer_flag[batch_start + i, 0] = 0
                 else:
-                    finer_flag[batch_start + i, 0] = 0
+                    if ((returned_unit["index"] in series) and match) or \
+                        abs(smallest_distance + 2 * len(returned_unit["query"])) < 1:
+                            finer_flag[batch_start + i, 0] = 1
+                    else:
+                        finer_flag[batch_start + i, 0] = 0
 
-    return finer_flag[:num_queries, 0]
+        return finer_flag[:num_queries, 0]
+    
+    else: # recall - hotstart
+        
+        num_queries = len(queries)
+        finer_flag = np.zeros((num_queries, 1))
+
+        for batch_start in tqdm(range(0, num_queries, batch_size)):
+            batch_end = min(batch_start + batch_size, num_queries)
+            batch_queries = queries[batch_start:batch_end]
+            batch_indices = indices[batch_start:batch_end]
+            
+            # TODO: Does not complete the search.
+            returned = store.query_batch(batch_queries, batch_indices, hotstart_list=namespaces[batch_start:batch_end], meta_dict=namespace_dict, prioritize=True, top_k=per_k) #1
+
+            for i, returned_unit in enumerate(returned):
+                
+                returned_unit_matched = returned_unit["matches"]
+                trained_positions = [sample["metadata"]["position"] for sample in returned_unit_matched]
+                metadata_set = [sample["metadata"]["metadata"] for sample in returned_unit_matched]
+                all_candidate_strings = [sample["metadata"]["text"] for sample in returned_unit_matched]
+                
+                identified_sub_indices, identified_indices, meta_retrieve, timer, smallest_distance = bwamem_align_parallel(
+                    all_candidate_strings, 
+                    trained_positions, 
+                    metadata_set,
+                    returned_unit["query"])
+                
+                series = [int(tup[0]) + int(tup[1]) for tup in zip(identified_sub_indices, identified_indices)]
+                if flex:
+                    if (is_within_range_of_any_element(returned_unit["index"], series, exactness) and match) or \
+                        abs(smallest_distance + 2 * len(returned_unit["query"])) < distance_bound + 1:
+                        finer_flag[batch_start + i, 0] = 1
+                    else:
+                        finer_flag[batch_start + i, 0] = 0
+                else:
+                    if ((returned_unit["index"] in series) and match) or \
+                        abs(smallest_distance + 2 * len(returned_unit["query"])) < 1:
+                            finer_flag[batch_start + i, 0] = 1
+                    else:
+                        finer_flag[batch_start + i, 0] = 0
+
+        return finer_flag[:num_queries, 0]
 
 
 
@@ -162,15 +210,25 @@ def read_fasta_chromosomes(file_path):
             if not line:
                 continue  # Skip empty lines
             if line.startswith('>'):
+                
                 # If the line starts with '>', it is a chromosome header
                 if header is not None:
+                    with open("test_cache/logs/headers", "a+") as f:
+                        f.write(header)
+                        f.write("\n")
                     yield (header, sequence)
-                header = line[1:5]  # Extract the header without '>'
+                    
+                    
+                header = line  # Extract the header without '>'
                 sequence = ''
+                
             else:
                 sequence += line
         # Yield the last chromosome entry in the file
         if header is not None:
+            with open("test_cache/logs/headers", "a+") as f:
+                f.write(header)
+                f.write("\n")
             yield (header, sequence)
 
 

@@ -51,12 +51,23 @@ def calculate_smith_waterman_distance(  string1,
     # Calculate the Smith-Waterman distance
     smith_waterman_distance = -alignment_score
     begins = []
-    begins.append(alignment.aligned[0][0][0]) # target, first match, first index TODO what if many matches
+    begins.append(alignment.aligned[0][0][0]) # target, first match, first index TODO what if many matches - rare at this length
     
     
     return {"elapsed time": time.time() - start, 
             "distance": smith_waterman_distance, 
             "begins":list(set(begins))}
+
+
+
+
+
+
+
+
+
+
+
 
 
 

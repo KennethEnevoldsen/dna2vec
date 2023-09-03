@@ -32,6 +32,7 @@ class Splicer:
         self.sequence = sequence
         self.len_sequence = len(self.sequence)
 
+
     def splice(
         self,
         mode: Literal["random", "fixed", "hard_serialized"] = "random",
