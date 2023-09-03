@@ -26,7 +26,7 @@ grid = {
     "insertion_rate": [0.0, 0.01],
     "deletion_rate" : [0.0, 0.01],
     "qq": [(60,90), (30,60)], # https://www.illumina.com/documents/products/technotes/technote_Q-Scores.pdf
-    "topk": [50, 100],
+    "topk": [500], #[50, 100],
     "distance_bound": [50, 25, 0],
     "exactness": [10]
 }
@@ -46,7 +46,25 @@ parser.add_argument('--device', type=str)
 
 
 
+
+def control_meta_map(path):
+    meta_dict = {}
+    with open(path, "r") as f:
+        lines = f.readlines()
+    for line in lines:
+        key = line.split(">")[1].split(" ")[0]
+        meta_dict[key] = line.strip()
+    
+    return meta_dict
+        
+
+
+
+
+
 if __name__ == "__main__":
+    
+    meta_data_map = control_meta_map("test_cache/logs/headers")
     
     args = parser.parse_args()
     fasta_file_path = raw_fasta_files[args.recipe]
@@ -81,6 +99,14 @@ if __name__ == "__main__":
                     grid["deletion_rate"], grid["qq"], grid["topk"], 
                     grid["distance_bound"], grid["exactness"]):
             
+            distributed = False
+            if topk > 100:
+                print("WARNING: Enabling default equal sampling from all chromosomes")
+                print("WARNING: Currently only executes the hotstart.")
+                per_k = topk // 25 # 25 chromosomes
+                distributed = True
+            
+            
             perf_read = 0
             perf_true = 0
             count = 0
@@ -88,7 +114,8 @@ if __name__ == "__main__":
             queries = []
             small_indices = []
             start_indices = []
-
+            meta = []
+            
             mapped_reads = simulate_mapped_reads(
                 n_reads_pr_amplicon=args.test,
                 read_length=read_length,
@@ -103,13 +130,17 @@ if __name__ == "__main__":
                 queries.append(sample.read.query_sequence)
                 small_indices.append(int(sample.read.reference_start))
                 start_indices.append(int(sample.seq_offset))
+                meta.append(meta_data_map[str(sample.id)])
+
 
             ground_truth = [index_main + inter_fine for index_main, inter_fine in zip(start_indices, small_indices)]    
             results = main_align(store, queries, ground_truth, topk, 
                                  exactness=exactness, distance_bound=distance_bound, 
-                                 flex = True)
+                                 flex = True, distributed=distributed, per_k=per_k, namespaces=meta, namespace_dict=meta_data_map)
+            
             total_perf = np.mean(results)
-            print(f"{str(quality).replace(',',';')},{read_length},{insertion_rate},{deletion_rate},{topk},{distance_bound},{exactness},{total_perf}\n")
+            # print(f"{str(quality).replace(',',';')},{read_length},{insertion_rate},{deletion_rate},{topk},{distance_bound},{exactness},{total_perf}\n")
+            # exit()
             f.write(f"{str(quality).replace(',',';')},{read_length},{insertion_rate},{deletion_rate},{topk},{distance_bound},{exactness},{total_perf}\n")
             f.flush()
     f.close()

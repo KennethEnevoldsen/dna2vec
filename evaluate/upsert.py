@@ -21,7 +21,7 @@ def execute(checkpoint_queue: list,
                 list_of_data_sources.append(data_recipes[source])
             else:
                 list_of_data_sources.append(source)
-        store.trigger_pinecone_upsertion(list_of_data_sources)
+        store.trigger_pinecone_upsertion(list_of_data_sources, add_namespace=True)
 
 
 if __name__ == "__main__":
