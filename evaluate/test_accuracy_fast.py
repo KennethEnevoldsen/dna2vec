@@ -26,7 +26,7 @@ grid = {
     "insertion_rate": [0.0, 0.01],
     "deletion_rate" : [0.0, 0.01],
     "qq": [(60,90), (30,60)], # https://www.illumina.com/documents/products/technotes/technote_Q-Scores.pdf
-    "topk": [500], #[50, 100],
+    "topk": [250], #[50, 100],
     "distance_bound": [50, 25, 0],
     "exactness": [10]
 }

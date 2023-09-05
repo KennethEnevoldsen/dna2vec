@@ -172,6 +172,7 @@ def main_align(store,
                     returned_unit["query"])
                 
                 series = [int(tup[0]) + int(tup[1]) for tup in zip(identified_sub_indices, identified_indices)]
+                
                 if flex:
                     if (is_within_range_of_any_element(returned_unit["index"], series, exactness) and match) or \
                         abs(smallest_distance + 2 * len(returned_unit["query"])) < distance_bound + 1:
