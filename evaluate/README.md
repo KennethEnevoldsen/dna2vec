@@ -1,4 +1,4 @@
-## Testbench for DNA2Vec
+## Testbench for DNA-ESA
 
 
 ### Setup
@@ -50,10 +50,16 @@ python test_permute.py
     --recipes               % <data recipe combinations>
     --checkpoints           % <model checkpoint>
     --mode                  % <permutation mode>
+    --generalize            % <smoothing factor>
+    --test_k                % <number of samples>
+    --topk                  % <set of topks>
+    --device                % <gpu>
 ```
 The additional argument `mode` specifies the type of permutation that is applied on the sequence.For example:
 ```bash
-python test_permute.py --recipes "ch2,ch3" --checkpoints "trained-ch2-1000" --mode "random_sub"
+python test_permute.py --recipes "all" --checkpoints "trained-all-longer" --mode "random_sub" --generalize 25 --test_k 1000 --topk 5;25;50 --device "cuda:1"
+
+python test_permute_fast.py --recipes "all" --checkpoints "trained-all-longer" --generalize 25 --test_k 1000 --topk 5;25;50 --device "cuda:1"
 ```
 
 Results corresponding to these evaluations are deposited in `DATA_PATH`. You can visualize the results of these evaluations using the testbench `test_permutes.ipynb`.
@@ -63,13 +69,35 @@ See `test_clustering.py` and `test_clustering.ipynb`.
 
 
 ### Step 4. Accuracy Computation
-Modify the parameter grid in `test_accuracy.py` and run the following:
+Ensure that Pinecone instances are running and the data is populated. Else go back to Step 2. To run accuracy computations at scale, run `test_accuracy.py` or `test_accuracy_fast.py`. Arguments:
 ```bash
-python test_accuracy.py --recipe "ch2" --checkpoints "trained-ch2-1000" --test 10000 --system "MSv3" 
+python test_accuracy.py 
+    --recipes               % <data recipe combinations>
+    --checkpoints           % <model checkpoint>
+    --test_k                % <number of samples>
+    --system                % <ART read generation system>
+    --device                % <gpu>
+```
+
+Modify the parameter grid in `test_accuracy.py` and example commands are below:
+```bash
+python test_accuracy.py --recipe "ch2" --checkpoints "trained-ch2-1000" --test 5000 --system "MSv3"
+
+python test_accuracy_fast.py --recipe "all" --checkpoints "trained-all_longer" --test 10000 --system "MSv3" 
 ```
 
 ## Setting up reference baselines
-### BWAMem2
+
+### Transformer-based DNA Encoders
+*To add a new baseline:* All the permute `test_permute.py`, `test_permute_fast.py` and accuracy scripts `test_accuracy.py`, `test_accuracy_fast.py` accept checkpoints that are defined in the following paths: `configs/model_checkpoints.yaml` contains `keyword: Baseline`. 
+
+Similar to `DNA-ESA`, encode functionality must specify the featurization process. See `inference_models.py` for details.
+
+Note: Ensure that the Pinecone database is populated with the related vectors prior to running tests.
+
+
+### Conventional Methods
+#### BWAMem2
 Please follow the instructions [here](https://github.com/bwa-mem2/bwa-mem2) to install the binary. The command:
 ```bash
 curl -L https://github.com/bwa-mem2/bwa-mem2/releases/download/v2.2.1/bwa-mem2-2.2.1_x64-linux.tar.bz2 \
@@ -82,10 +110,10 @@ The binary is more optimized than the build from source and **is recommended**. 
 ```
 Following the indexing, you can run calls to our custom Python wrapper (`evaluate/aligners/bwamem2.py`) as follows:
 ```bash
-bwa_mem2_align(reference_path, [sample_read]*10000, "/home/pholur/dna2vec/evaluate/aligners", "./test.sam");
+bwa_mem2_align(reference_path, [sample_read]*10000, "/home/pholur/DNA-ESA/evaluate/aligners", "./test.sam");
 ```
 
-### Minimap2
+#### Minimap2
 Please follow the instructions [here](https://github.com/lh3/minimap2) to download the source and make. The command:
 ```bash
 git clone https://github.com/lh3/minimap2
@@ -94,15 +122,15 @@ cd minimap2 && make
 Alignment queries can now be attempted:
 ```bash
 minimap2_align("<path>/chromosome_2/", [sample_read]*10000, 
-               "<source path>/dna2vec/evaluate/aligners", "./test.sam");
+               "<source path>/DNA-ESA/evaluate/aligners", "./test.sam");
 ```
 
-### Bowtie2
+#### Bowtie2
 Please follow the instructions [here](https://github.com/BenLangmead/bowtie2) to download a [build](https://github.com/BenLangmead/bowtie2/releases) that suits your server configurations. Build the index with (takes a couple minutes per chromosome):
 ```bash
 /bowtie2-2.5.1-linux-x86_64/bowtie2-build <path>/NC_000002.fasta <same or different index path>/NC_000002
 ```
 Alignment queries can now be attempted:
 ```bash
-bowtie2_align(reference_path, [sample_read]*10000, "<source path>/dna2vec/evaluate/aligners/bowtie2-2.5.1-linux-x86_64", "./test.sam");
+bowtie2_align(reference_path, [sample_read]*10000, "<source path>/DNA-ESA/evaluate/aligners/bowtie2-2.5.1-linux-x86_64", "./test.sam");
 ```

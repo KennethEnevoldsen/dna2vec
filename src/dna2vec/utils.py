@@ -138,7 +138,7 @@ def load_human_reference_genome(path: Optional[Path] = None) -> FastaIterator:
     Returns:
         An iterator of sequence records.
     """
-    if path is None:
-        path = download_human_reference_genome()
-
+    # if path is None:
+    #     path = download_human_reference_genome()
+    print(path)
     return SeqIO.parse(path, "fasta")

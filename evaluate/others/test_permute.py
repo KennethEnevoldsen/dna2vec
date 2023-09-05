@@ -12,67 +12,71 @@ from helpers import pick_random_lines, initialize_pinecone, data_recipes, checkp
 import numpy as np
 from typing import Literal
 import random
-from helpers import bwamem_align
+from aligners.smith_waterman import bwamem_align_parallel, bwamem_align, bwamem_align_parallel_process
 
 parser = argparse.ArgumentParser(description="Permute evaluate")
 parser.add_argument('--recipes', type=str)
 parser.add_argument('--checkpoints', type=str)
 parser.add_argument('--mode', type=str)
+parser.add_argument('--generalize', type=int)
+parser.add_argument('--test_k', type=int)
+parser.add_argument("--topk", type=str)
+parser.add_argument("--device", type=str)
 
     
 
 
-def edit(query, edit_mode, generalize):
+# def edit(query, edit_mode, generalize):
     
-    if edit_mode == "end deplete":
-        if np.random.rand() > 0.5:
-            return query[generalize:]
-        else:
-            return query[:-1*generalize]
+#     if edit_mode == "end deplete":
+#         if np.random.rand() > 0.5:
+#             return query[generalize:]
+#         else:
+#             return query[:-1*generalize]
         
-    elif edit_mode == "swap":
-        char_list = list(query)
-        idx = list(range(len(char_list)))
+#     elif edit_mode == "swap":
+#         char_list = list(query)
+#         idx = list(range(len(char_list)))
         
-        for _ in range(generalize):
-            i1, i2 = random.sample(idx, 2)
-            char_list[i1], char_list[i2] = char_list[i2], char_list[i1]
+#         for _ in range(generalize):
+#             i1, i2 = random.sample(idx, 2)
+#             char_list[i1], char_list[i2] = char_list[i2], char_list[i1]
         
-        return ''.join(char_list)
+#         return ''.join(char_list)
 
-    elif edit_mode == "random deplete":
-        try:
-            start_index = random.sample(range(len(query) - generalize), 1)[0]
-            query = query[:start_index] + query[(start_index + generalize):]
-        except:
-            query = query
-        return query
+#     elif edit_mode == "random deplete":
+#         try:
+#             start_index = random.sample(range(len(query) - generalize), 1)[0]
+#             query = query[:start_index] + query[(start_index + generalize):]
+#         except:
+#             query = query
+#         return query
 
-    else:
-        raise NotImplementedError("Edit mode is under-defined.")
-
-
+#     else:
+#         raise NotImplementedError("Edit mode is under-defined.")
 
 
-def permute(store, query, index, top_k, metadata, edit_mode, generalize):
+
+
+# def permute(store, query, index, top_k, metadata, edit_mode, generalize):
     
-    train_flag = np.zeros((1,len(query)))
-    start = 0
-    for _ in range(len(query) // generalize):
+#     train_flag = np.zeros((1,len(query)))
+#     start = 0
+#     for _ in range(len(query) // generalize):
         
-        returned = store.query([query], top_k=top_k)["matches"]
-        trained_positions = {sample["metadata"]["position"] for sample in returned}
-        metadata_set = {sample["metadata"]["metadata"] for sample in returned}
+#         returned = store.query([query], top_k=top_k)["matches"]
+#         trained_positions = {sample["metadata"]["position"] for sample in returned}
+#         metadata_set = {sample["metadata"]["metadata"] for sample in returned}
         
-        if index in trained_positions and metadata in metadata_set:
-            train_flag[0,start:start + generalize] = 1
-        else:
-            train_flag[0,start:start + generalize] = 0
+#         if index in trained_positions and metadata in metadata_set:
+#             train_flag[0,start:start + generalize] = 1
+#         else:
+#             train_flag[0,start:start + generalize] = 0
         
-        start += generalize
-        query = edit(query, edit_mode, generalize)
+#         start += generalize
+#         query = edit(query, edit_mode, generalize)
         
-    return train_flag
+#     return train_flag
 
 
 
@@ -93,8 +97,7 @@ def custom_random_sub(store, query, index, top_k, metadata, generalize):
     total_timer_flag = np.zeros_like(train_flag)
     start = 0
 
-    for k in tqdm(range(1, len(query) // generalize)):
-        
+    for k in tqdm(range(1, (len(query) // generalize) + 1)):
         beginning_time = time.time()
 
         sub_index, substring = identify_random_subsequence(
@@ -105,32 +108,23 @@ def custom_random_sub(store, query, index, top_k, metadata, generalize):
         trained_positions = [sample["metadata"]["position"] for sample in returned]
         metadata_set = [sample["metadata"]["metadata"] for sample in returned]
         
-        if (metadata,index) in zip(metadata_set, trained_positions):
-            train_flag[0,start:start + generalize] = 1
-        else:
-            train_flag[0,start:start + generalize] = 0
-        
         all_candidate_strings = [sample["metadata"]["text"] for sample in returned]
         
-        identified_sub_indices, identified_indices, metadata_indices, timer = bwamem_align(
+        identified_sub_indices, identified_indices, _, timer, smallest_key = bwamem_align(
                                                                                             all_candidate_strings, 
                                                                                             trained_positions, 
                                                                                             metadata_set,
                                                                                             substring)
         
-        # print((sub_index, index, metadata), list(zip(
-        #     identified_sub_indices, identified_indices, metadata_indices)))
-        # exit()
-        
-        if (sub_index, index, metadata) in zip(
-            identified_sub_indices, identified_indices, metadata_indices):
+        series = [int(tup[0]) + int(tup[1]) for tup in zip(identified_sub_indices, identified_indices)]
+        absolute_query = int(index) + int(sub_index)
+        if (absolute_query in series) or abs(smallest_key + 2*len(query)) < 1: # exact SW match
             finer_flag[0,start:start + generalize] = 1
         else:
             finer_flag[0,start:start + generalize] = 0
         timer_flag[0, start:start + generalize] = timer
         total_timer_flag[0, start:start + generalize] = time.time() - beginning_time
         start += generalize
-      
     return train_flag, finer_flag, timer_flag, total_timer_flag
 
 
@@ -172,19 +166,24 @@ def main(paths:list,
             total_timer_flags[i,:] = total_timer
             
         else:
-            train_flag = permute(store, 
-                                query, 
-                                index, 
-                                top_k,  
-                                metadata, 
-                                edit_mode, 
-                                generalize)
+            raise NotImplementedError("Edit mode is outdated.")
+            # train_flag = permute(store, 
+            #                     query, 
+            #                     index, 
+            #                     top_k,  
+            #                     metadata, 
+            #                     edit_mode, 
+            #                     generalize)
             
         train_flags[i,:] = train_flag
         
+        if i % 5 == 0:
+            np.savez_compressed(f"test_cache/permute/run_\
+{config}_{edit_mode}_{test_k}_{top_k}_{generalize}.npz", train = train_flags[:i,:], finer = finer_flags[:i,:], timer = timer_flags[:i,:], total_timer = total_timer_flags[:i,:])
+                
     np.savez_compressed(f"test_cache/permute/run_\
 {config}_{edit_mode}_{test_k}_{top_k}_{generalize}.npz", train = train_flags, finer = finer_flags, timer = timer_flags, total_timer = total_timer_flags)
-        
+                
 
 
 
@@ -195,7 +194,7 @@ if __name__ == "__main__":
     data_queue = args.recipes.split(";")
     checkpoint_queue = args.checkpoints.split(";")
     
-    for (store, data_alias, config) in initialize_pinecone(checkpoint_queue, data_queue):
+    for (store, data_alias, config) in initialize_pinecone(checkpoint_queue, data_queue, args.device):
         list_of_data_sources = []
         sources = data_alias.split(",")
         for source in sources:
@@ -203,6 +202,12 @@ if __name__ == "__main__":
                 list_of_data_sources.append(data_recipes[source])
             else:
                 list_of_data_sources.append(source)
-                
-        main(list_of_data_sources, store, config, top_k=5, edit_mode=args.mode, test_k = 500, generalize=25)
+        
+        for topk in args.topk.split(";"):       
+            main(list_of_data_sources, 
+                store, 
+                config, 
+                top_k=int(topk), 
+                test_k = args.test_k, 
+                generalize=args.generalize)
         # main(list_of_data_sources, store, config, top_k=50, edit_mode=args.mode, test_k = 1000, generalize=25)

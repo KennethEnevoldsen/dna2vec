@@ -1,7 +1,9 @@
 import random
 import yaml
+import numpy as np
 
 from pinecone_store import PineconeStore
+from aligners.smith_waterman import bwamem_align, bwamem_align_parallel
 
 from alignment_metrics import calculate_smith_waterman_distance
 from collections import defaultdict
@@ -22,6 +24,171 @@ with open("configs/model_checkpoints.yaml", 'r') as stream:
     
 with open("configs/raw.yaml", 'r') as stream:
     raw_fasta_files = yaml.safe_load(stream)
+
+from tqdm import tqdm
+
+
+
+
+
+import scipy.stats as stats
+
+def clopper_pearson_interval(successes, trials, confidence_level=0.95):
+    alpha = 1 - confidence_level
+    
+    lower_bound = stats.beta.ppf(alpha / 2, successes, trials - successes + 1)
+    upper_bound = stats.beta.ppf(1 - alpha / 2, successes + 1, trials - successes)
+    
+    return lower_bound, upper_bound
+
+
+
+
+
+import time
+# def main_align(store, 
+#                 queries, 
+#                 indices, 
+#                 top_k,
+#                 exactness=0,
+#                 distance_bound=0,
+#                 flex=False,
+#                 batch_size=64):
+    
+    
+#     finer_flag = np.zeros((len(queries), 1))
+#     returned = store.query_batch(queries, indices, top_k=top_k)
+    
+#     for i,returned_unit in enumerate(returned): # can potentially be shuffled but that's okay
+#         returned_unit_matched = returned_unit["matches"]
+#         trained_positions = [sample["metadata"]["position"] for sample in returned_unit_matched]
+#         metadata_set = [sample["metadata"]["metadata"] for sample in returned_unit_matched]
+        
+#         all_candidate_strings = [sample["metadata"]["text"] for sample in returned_unit_matched]
+        
+#         identified_sub_indices, identified_indices, _, timer, smallest_distance = bwamem_align_parallel(
+#                                                                                             all_candidate_strings, 
+#                                                                                             trained_positions, 
+#                                                                                             metadata_set,
+#                                                                                             returned_unit["query"])
+        
+#         series = [int(tup[0]) + int(tup[1]) for tup in zip(identified_sub_indices, identified_indices)]
+
+#         if flex:
+#             if is_within_range_of_any_element(returned_unit["index"], series, exactness) or \
+#                     abs(smallest_distance + 2*len(returned_unit["query"])) < distance_bound + 1: # the 1 here helps with instabilities
+#                 finer_flag[i,0] = 1
+#             else:
+#                 finer_flag[i,0] = 0
+#         else:
+#             if (returned_unit["index"] in series) or abs(smallest_distance + 2*len(returned_unit["query"])) < 1: # exact SW match
+#                 finer_flag[i,0] = 1
+#             else:
+#                 finer_flag[i,0] = 0
+
+#     return finer_flag
+
+
+
+def main_align(store, 
+                queries, 
+                indices, 
+                top_k,
+                exactness=0,
+                distance_bound=0,
+                flex=False,
+                batch_size=64,
+                match=True,
+                distributed=False,
+                per_k=0,
+                namespaces=None,
+                namespace_dict=None):
+
+    if not distributed:
+        
+        num_queries = len(queries)
+        finer_flag = np.zeros((num_queries, 1))
+
+        for batch_start in tqdm(range(0, num_queries, batch_size)):
+            batch_end = min(batch_start + batch_size, num_queries)
+            batch_queries = queries[batch_start:batch_end]
+            batch_indices = indices[batch_start:batch_end]
+            
+            returned = store.query_batch(batch_queries, batch_indices, top_k=top_k) #1
+
+            for i, returned_unit in enumerate(returned):
+                
+                returned_unit_matched = returned_unit["matches"]
+                trained_positions = [sample["metadata"]["position"] for sample in returned_unit_matched]
+                metadata_set = [sample["metadata"]["metadata"] for sample in returned_unit_matched]
+                all_candidate_strings = [sample["metadata"]["text"] for sample in returned_unit_matched]
+                
+                identified_sub_indices, identified_indices, meta_retrieve, timer, smallest_distance = bwamem_align_parallel(
+                    all_candidate_strings, 
+                    trained_positions, 
+                    metadata_set,
+                    returned_unit["query"])
+                
+                series = [int(tup[0]) + int(tup[1]) for tup in zip(identified_sub_indices, identified_indices)]
+                if flex:
+                    if (is_within_range_of_any_element(returned_unit["index"], series, exactness) and match) or \
+                        abs(smallest_distance + 2 * len(returned_unit["query"])) < distance_bound + 1:
+                        finer_flag[batch_start + i, 0] = 1
+                    else:
+                        finer_flag[batch_start + i, 0] = 0
+                else:
+                    if ((returned_unit["index"] in series) and match) or \
+                        abs(smallest_distance + 2 * len(returned_unit["query"])) < 1:
+                            finer_flag[batch_start + i, 0] = 1
+                    else:
+                        finer_flag[batch_start + i, 0] = 0
+
+        return finer_flag[:num_queries, 0]
+    
+    else: # recall - hotstart
+        
+        num_queries = len(queries)
+        finer_flag = np.zeros((num_queries, 1))
+
+        for batch_start in tqdm(range(0, num_queries, batch_size)):
+            batch_end = min(batch_start + batch_size, num_queries)
+            batch_queries = queries[batch_start:batch_end]
+            batch_indices = indices[batch_start:batch_end]
+            
+            # TODO: Does not complete the search.
+            returned = store.query_batch(batch_queries, batch_indices, hotstart_list=namespaces[batch_start:batch_end], meta_dict=namespace_dict, prioritize=True, top_k=per_k) #1
+
+            for i, returned_unit in enumerate(returned):
+                
+                returned_unit_matched = returned_unit["matches"]
+                trained_positions = [sample["metadata"]["position"] for sample in returned_unit_matched]
+                metadata_set = [sample["metadata"]["metadata"] for sample in returned_unit_matched]
+                all_candidate_strings = [sample["metadata"]["text"] for sample in returned_unit_matched]
+                
+                identified_sub_indices, identified_indices, meta_retrieve, timer, smallest_distance = bwamem_align_parallel(
+                    all_candidate_strings, 
+                    trained_positions, 
+                    metadata_set,
+                    returned_unit["query"])
+                
+                series = [int(tup[0]) + int(tup[1]) for tup in zip(identified_sub_indices, identified_indices)]
+                
+                if flex:
+                    if (is_within_range_of_any_element(returned_unit["index"], series, exactness) and match) or \
+                        abs(smallest_distance + 2 * len(returned_unit["query"])) < distance_bound + 1:
+                        finer_flag[batch_start + i, 0] = 1
+                    else:
+                        finer_flag[batch_start + i, 0] = 0
+                else:
+                    if ((returned_unit["index"] in series) and match) or \
+                        abs(smallest_distance + 2 * len(returned_unit["query"])) < 1:
+                            finer_flag[batch_start + i, 0] = 1
+                    else:
+                        finer_flag[batch_start + i, 0] = 0
+
+        return finer_flag[:num_queries, 0]
+
+
 
 
 
@@ -44,40 +211,65 @@ def read_fasta_chromosomes(file_path):
             if not line:
                 continue  # Skip empty lines
             if line.startswith('>'):
+                
                 # If the line starts with '>', it is a chromosome header
                 if header is not None:
+                    with open("test_cache/logs/headers", "a+") as f:
+                        f.write(header)
+                        f.write("\n")
                     yield (header, sequence)
-                header = line[1:4]  # Extract the header without '>'
+                    
+                    
+                header = line  # Extract the header without '>'
                 sequence = ''
+                
             else:
                 sequence += line
         # Yield the last chromosome entry in the file
         if header is not None:
+            with open("test_cache/logs/headers", "a+") as f:
+                f.write(header)
+                f.write("\n")
             yield (header, sequence)
 
 
+
+def is_within_range_of_any_element(X: int, Y: list, Z: int):
+    for element in Y:
+        if abs(X - element) <= Z:
+            return True
+    return False
 
 
 
 def initialize_pinecone(checkpoint_queue: list[str], 
                         data_queue: list[str], 
-                        device:str="cuda:0"
+                        device:str
 ):
     
     import torch
     
     for alias in checkpoint_queue:
         
-        if alias in checkpoints:
-            received = torch.load(checkpoints[alias])
-        else:
-            received = torch.load(alias)
+        if alias in checkpoints and checkpoints[alias] != "Baseline":
+            received = torch.load(checkpoints[alias], map_location="cpu")
+            config = received["config"]
+            config.model_config.tokenizer_path = checkpoints["tokenizer"]
+            encoder, pooling, tokenizer = model_from_config(config.model_config)
+            encoder.load_state_dict(received["model"])
+            encoder.eval()
+            model_params = {
+                                        "tokenizer": tokenizer,
+                                        "model": encoder,
+                                        "pooling": pooling,
+                            }
+            baseline = False
+            baseline_name = None
             
-        config = received["config"]
-        config.model_config.tokenizer_path = checkpoints["tokenizer"]
-        encoder, pooling, tokenizer = model_from_config(config.model_config)
-        encoder.load_state_dict(received["model"])
-        encoder.eval()
+        elif alias in checkpoints and checkpoints[alias] == "Baseline":
+            model_params = None
+            baseline = True
+            baseline_name = alias
         
         for data_alias in data_queue:
             config = str("config-" + alias + "-" + data_alias).lower()
@@ -85,11 +277,9 @@ def initialize_pinecone(checkpoint_queue: list[str],
                                     device = torch.device(device),
                                     index_name = str("config-" + alias + "-" + data_alias.replace(",","-")).lower(),
                                     metric = "cosine",
-                                    model_params = {
-                                        "tokenizer": tokenizer,
-                                        "model": encoder,
-                                        "pooling": pooling,
-                                    }
+                                    model_params = model_params,
+                                    baseline_name=baseline_name,
+                                    baseline=baseline
                                 )
             
             yield store, data_alias, config

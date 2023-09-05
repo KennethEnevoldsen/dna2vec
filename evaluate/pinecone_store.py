@@ -10,31 +10,10 @@ import pinecone
 import torch
 from tqdm import tqdm
 import random
+from inference_models import EvalModel, Baseline
+from typing import Optional
+import concurrent.futures
 
-
-
-class EvalModel():
-    def __init__(self, tokenizer, model, pooling, device):
-        self.tokenizer = tokenizer
-        self.model = model
-        
-        self.pooling = pooling
-        self.pooling.to(device)
-        
-        self.model.to(device)
-        self.device = device
-        
-        self.model.eval()
-    
-    def encode(self, x):
-        with torch.no_grad():
-            input_data = self.tokenizer.tokenize(x).to_torch()
-            last_hidden_state = self.model(input_ids = input_data["input_ids"].to(self.device), 
-                                           attention_mask = input_data["attention_mask"].to(self.device))
-            y = self.pooling(last_hidden_state, attention_mask=input_data["attention_mask"].to(self.device))
-            return torch.nn.functional.normalize(y.squeeze(), dim=0).detach().cpu().numpy()
-
-        
 
 class PineconeStore:
     def __init__(
@@ -43,9 +22,16 @@ class PineconeStore:
         index_name: str,
         metric: str = "cosine",
         model_params = None,
+        baseline: bool = False,
+        baseline_name: Optional[str] = None
     ):
-        if model_params == None:
+        if model_params is None and not baseline:
             raise ValueError("Model params are empty.")
+        if baseline:
+            self.model = Baseline(
+                option = baseline_name,
+                device = device
+            )
         else:
             self.model = EvalModel(
                 model_params["tokenizer"],
@@ -53,7 +39,7 @@ class PineconeStore:
                 model_params["pooling"],
                 device = device
             )
-        
+
         if "config-" in index_name: # premium account
             self.api_key = "ded0a046-d0fe-4f8a-b45c-1d6274ad555e"
             self.environment = "us-west4-gcp"
@@ -106,30 +92,43 @@ class PineconeStore:
         """
         import pickle
         
+        namespace = ""
         with open(file_path, "rb") as f:
+            
             list_of_objects = pickle.load(f)
             batch = []
+            
             for unit in list_of_objects:
-                batch.append(unit)
-                if len(batch) == batch_size:
-                    yield batch
-                    batch = []
+                
+                if namespace == "":
+                    namespace = unit["metadata"]
+                    
+                if namespace != unit["metadata"] or len(batch) >= batch_size:
+                    yield batch, namespace
+                    batch = [unit]
+                    namespace = unit["metadata"]
+                else:
+                    batch.append(unit)
+
             if batch:
-                yield batch
+                yield batch, namespace
+
 
     @staticmethod
     def generate_random_string(length: str = 20):
         letters = string.ascii_lowercase
         return "".join(random.choice(letters) for _ in range(length))
 
+
+
     def trigger_pinecone_upsertion(self, file_paths: list, 
-                                   batch_size: int = 64):
+                                   batch_size: int = 100, add_namespace=False):
         from tqdm import tqdm
         
         for file_path in file_paths:
             batches = PineconeStore.batched_data_generator(file_path, batch_size)
 
-            for batch in tqdm(batches):
+            for _, (batch,namespace) in tqdm(enumerate(batches)):
                 ids = [PineconeStore.generate_random_string() for _ in range(len(batch))]
 
                 # create metadata batch - we can add context here
@@ -141,20 +140,62 @@ class PineconeStore:
                 # create records list for upsert
                 records = zip(ids, xc, metadatas)
                 # upsert to Pinecone
-                self.index.upsert(vectors=records)
+                if add_namespace:
+                    self.index.upsert(vectors=records, namespace=namespace)
+                else:
+                    self.index.upsert(vectors=records)
 
         # check number of records in the index
         self.index.describe_index_stats()
 
-    def query(self, query, top_k=5):  # consider batching if slow
+
+
+    # def query(self, query, top_k=5):  # consider batching if slow
+    #     # create the query vector
+    #     xq = self.model.encode(query).tolist()
+    #     # now query
+    #     xc = self.index.query(xq, top_k=top_k, include_metadata=True)
+    #     return xc
+
+    
+    def query_batch(self, queries, indices, top_k=5, hotstart_list=None, meta_dict=None, prioritize=False):  # consider batching if slow
+        
         # create the query vector
-        xq = self.model.encode(query).tolist()
+        xqs = self.model.encode(queries).tolist()
+        all_results = []
+        
+        def query_single(xq, query, index, single_hotstart):
+            if not prioritize:
+                xc = self.index.query(xq, top_k=top_k, include_metadata=True)
+            else:
+                xc = self.index.query(xq, top_k=top_k, include_metadata=True,
+                                      namespace = single_hotstart)
+            
+            xc["query"] = query
+            xc["index"] = index
+            return xc
 
-        # now query
-        xc = self.index.query(xq, top_k=top_k, include_metadata=True)
+        if hotstart_list is None:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                futures = [executor.submit(query_single, xq, query, index, None) \
+                    for xq, query, index in zip(xqs, queries, indices)]
+            
+            for future in concurrent.futures.as_completed(futures):
+                all_results.append(future.result())
+                
+        else:
+            # for xq, query, index, single_hotstart in zip(xqs, queries, indices, hotstart_list):
+            #     all_results.append(query_single(xq, query, index, single_hotstart))
+            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                futures = [executor.submit(query_single, xq, query, index, single_hotstart) \
+                    for xq, query, index, single_hotstart in zip(xqs, queries, indices, hotstart_list)]
 
-        return xc
+            for future in concurrent.futures.as_completed(futures):
+                all_results.append(future.result())
 
+        return all_results
+    
+    
     def drop_table(self):  # times out for large data!
         pinecone.delete_index(self.index_name)
 
@@ -180,7 +221,7 @@ if __name__ == "__main__":
     random.seed(42)
 
     pinecone_obj = PineconeStore(
-        device="cuda:4", 
+        device="cuda:3", 
         index_name=args.indexname
     )
 
