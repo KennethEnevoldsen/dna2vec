@@ -1,6 +1,6 @@
-# DNA-2-Vec
+# DNA-ESA
 
-This repository contains code files for DNA-2-Vec. The main code files can be found under `src/dna2vec`, while the data is saved under the `data` directory.
+This repository contains code files for DNA-ESA. The main code files can be found under `src/dna2vec`, while the data is saved under the `data` directory.
 
 ## Installation
 
@@ -69,7 +69,7 @@ python src/dna2vec/pinecone_store.py --inputpath /home/pholur/dna-2-vec/data/sub
     - [x] Add learning rate scheduler
     - [x] Add gradient accumulation
 - [ ] Add more data
-    - [ ] Add all of the human genome
+    - [x] Add all of the human genome
 - [ ] Issues
 
 - [ ] fix loss to mean loss? shouldn't change with batch size
