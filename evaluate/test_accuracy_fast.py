@@ -21,15 +21,37 @@ from dna2vec.simulate import simulate_mapped_reads
 
 from pinecone_store import PineconeStore
 
+# grid = {
+#     "read_length": [250], #[150, 300, 500],
+#     "insertion_rate": [0.0, 0.01],
+#     "deletion_rate" : [0.0, 0.01],
+#     "qq": [(60,90), (30,60)], # https://www.illumina.com/documents/products/technotes/technote_Q-Scores.pdf
+#     "topk": [1250, 250], #[50, 100],
+#     "distance_bound": [25, 5, 0],
+#     "exactness": [2]
+# }
+
+# grid = {
+#     "read_length": [250], #[150, 300, 500],
+#     "insertion_rate": [0.01],
+#     "deletion_rate" : [0.01],
+#     "qq": [(30,60)], # https://www.illumina.com/documents/products/technotes/technote_Q-Scores.pdf
+#     "topk": [250], #[50, 100],
+#     "distance_bound": [50],
+#     "exactness": [10]
+# }
+
+
 grid = {
-    "read_length": [250], #[150, 300, 500],
+    "read_length": [100, 150], #[150, 300, 500],
     "insertion_rate": [0.0, 0.01],
     "deletion_rate" : [0.0, 0.01],
-    "qq": [(60,90), (30,60)], # https://www.illumina.com/documents/products/technotes/technote_Q-Scores.pdf
-    "topk": [250], #[50, 100],
-    "distance_bound": [50, 25, 0],
-    "exactness": [10]
+    "qq": [(30,60), (60,90)], # https://www.illumina.com/documents/products/technotes/technote_Q-Scores.pdf
+    "topk": [1250], #[50, 100],
+    "distance_bound": [5],
+    "exactness": [2]
 }
+
 
 
 ###
