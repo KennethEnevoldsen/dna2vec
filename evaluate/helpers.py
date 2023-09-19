@@ -102,7 +102,8 @@ def main_align(store,
                 distributed=False,
                 per_k=0,
                 namespaces=None,
-                namespace_dict=None):
+                namespace_dict=None,
+                dictionary_of_values=None):
 
     if not distributed:
         
@@ -165,6 +166,9 @@ def main_align(store,
                 metadata_set = [sample["metadata"]["metadata"] for sample in returned_unit_matched]
                 all_candidate_strings = [sample["metadata"]["text"] for sample in returned_unit_matched]
                 
+                if dictionary_of_values is not None:
+                    dictionary_of_values[returned_unit["query"]].append(all_candidate_strings)
+                
                 identified_sub_indices, identified_indices, meta_retrieve, timer, smallest_distance = bwamem_align_parallel(
                     all_candidate_strings, 
                     trained_positions, 
@@ -186,6 +190,12 @@ def main_align(store,
                     else:
                         finer_flag[batch_start + i, 0] = 0
 
+                if dictionary_of_values is not None:
+                        dictionary_of_values[returned_unit["query"]].append(bool(finer_flag[batch_start + i, 0]))
+                        
+        if dictionary_of_values is not None:
+            return [finer_flag[:num_queries, 0], dictionary_of_values]
+        
         return finer_flag[:num_queries, 0]
 
 
