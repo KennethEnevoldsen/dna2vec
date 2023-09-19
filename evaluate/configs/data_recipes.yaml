@@ -12,3 +12,5 @@ rat1: "/mnt/SSD2/pholur/General_Models/data/rat1/floodfill.pkl"
 rat2: "/mnt/SSD2/pholur/General_Models/data/rat2/floodfill.pkl"
 
 ch23Y: "/mnt/SSD2/pholur/General_Models/data/chr23Y/floodfill.pkl"
+
+chM: "/mnt/SSD2/pholur/General_Models/data/chM/floodfill.pkl"
