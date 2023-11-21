@@ -1,6 +1,12 @@
 ch2: "/home/pholur/dna2vec/evaluate/data/chromosome_2/floodfill.pkl"
+ch2partiallonger: "/home/pholur/dna2vec/evaluate/data/chromosome_2/floodfill-somewhat-long.pkl"
+
+
 ch3: "/home/pholur/dna2vec/evaluate/data/chromosome_3/floodfill.pkl"
+
 all: "/mnt/SSD2/pholur/General_Models/data/all/floodfill.pkl"
+alllonger: "/mnt/SSD2/pholur/General_Models/data/all/floodfill-long.pkl"
+allpartiallonger: "/mnt/SSD2/pholur/General_Models/data/all/floodfill-somewhat-long.pkl"
 
 ch11: "/mnt/SSD2/pholur/General_Models/data/chr11/floodfill.pkl"
 chY: "/mnt/SSD2/pholur/General_Models/data/chrY/floodfill.pkl"
@@ -14,3 +20,6 @@ rat2: "/mnt/SSD2/pholur/General_Models/data/rat2/floodfill.pkl"
 ch23Y: "/mnt/SSD2/pholur/General_Models/data/chr23Y/floodfill.pkl"
 
 chM: "/mnt/SSD2/pholur/General_Models/data/chM/floodfill.pkl"
+
+thermusaquaticus: "/mnt/SSD2/pholur/General_Models/data/thermus_aquaticus/floodfill.pkl"
+acidabacteria: "/mnt/SSD2/pholur/General_Models/data/acidabacteria/floodfill.pkl"

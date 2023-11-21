@@ -21,8 +21,12 @@ def calculate_smith_waterman_distance(  string1,
     aligner.mismatch_score = mismatch_penalty
     aligner.match_score = match_score
     aligner.mode = 'local'
+    
+    # try:
     alignments = aligner.align(
         string1, string2)
+    # except:
+    #     raise ValueError("Aligner issue")
     # alignments = pairwise2.align.localms(
     #     string1, string2, match_score, mismatch_penalty, 
     #     open_gap_penalty, continue_gap_penalty
@@ -33,13 +37,13 @@ def calculate_smith_waterman_distance(  string1,
     
     if alignments == [] or alignments is None: # exponentially large
         return {"elapsed time": time.time() - start, 
-            "distance": float("inf"), 
+            "distance": float(0), 
             "begins":[]}
 
     try:
         if len(alignments) < 1:
             return {"elapsed time": time.time() - start, 
-            "distance": float("inf"), 
+            "distance": float(0), 
             "begins":[]}
     except OverflowError: # too many matches
         pass
@@ -129,7 +133,10 @@ def bwamem_align_parallel(all_candidate_strings: list[str],
     
     total_time = time.time()
     refined_results = defaultdict(list)
-
+    
+    # print(substring, len(all_candidate_strings))
+    # print(all_candidate_strings)
+    
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         results = list(executor.map(process_single_string, 
                                     zip(all_candidate_strings, 
@@ -143,10 +150,12 @@ def bwamem_align_parallel(all_candidate_strings: list[str],
                 (starting_sub_index, train_pos, metadata)
             )
     
+    # print(refined_results.keys())
+    # smallest_key = min(refined_results.keys())
     try:
         smallest_key = min(refined_results.keys())
     except ValueError:
-        return [], [], [], time.time() - total_time
+        return [0], [0], [0], time.time() - total_time, 0
     
 
         

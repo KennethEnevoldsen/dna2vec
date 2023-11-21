@@ -14,14 +14,18 @@ def bowtie2_align(reference_index, reads_list, path_to_bowtie, output_sam):
     """
 
     # Create a temporary interleaved FASTQ file to store the reads
-    temp_fastq = "temp_interleaved.fastq"
-    with open(temp_fastq, "w") as f:
-        for i in range(0, len(reads_list)):
-            f.write(f"@read_{i}\n{reads_list[i]}\n+\n{'I'*len(reads_list[i])}\n")  # Assuming all reads have the same length
+    if isinstance(reads_list, list):
+        temp_fastq = "temp_interleaved.fastq"
+        with open(temp_fastq, "w") as f:
+            for i in range(0, len(reads_list)):
+                f.write(f"@read_{i}\n{reads_list[i]}\n+\n{'I'*len(reads_list[i])}\n")  # Assuming all reads have the same length
 
-    # Command to run Bowtie2 alignment with interleaved input
-    bowtie2_command = f"{path_to_bowtie}/bowtie2 -x {reference_index} -q {temp_fastq} -S {output_sam}" # --interleaved"
+        # Command to run Bowtie2 alignment with interleaved input
+        bowtie2_command = f"{path_to_bowtie}/bowtie2 -x {reference_index} -q {temp_fastq} -S {output_sam}" # --interleaved"
 
+    else:
+        bowtie2_command = f"{path_to_bowtie}/bowtie2 -x {reference_index} -q {reads_list} -S {output_sam}" # --interleaved"
+        
     try:
         # Execute Bowtie2 command using subprocess
         subprocess.run(bowtie2_command, shell=True, check=True)
@@ -43,7 +47,8 @@ def bowtie2_align(reference_index, reads_list, path_to_bowtie, output_sam):
         print(f"Error during Bowtie2 alignment: {e}")
 
     # Remove the temporary interleaved FASTQ file
-    subprocess.run(f"rm {temp_fastq}", shell=True, check=True)
+    if isinstance(reads_list, list):
+        subprocess.run(f"rm {temp_fastq}", shell=True, check=True)
     
     starting_indices = []
     with open(output_sam, "r") as sam_file:

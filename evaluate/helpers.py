@@ -105,11 +105,13 @@ def main_align(store,
                 namespace_dict=None,
                 dictionary_of_values=None):
 
+    smallest_distances = []
+
     if not distributed:
         
         num_queries = len(queries)
         finer_flag = np.zeros((num_queries, 1))
-
+        
         for batch_start in tqdm(range(0, num_queries, batch_size)):
             batch_end = min(batch_start + batch_size, num_queries)
             batch_queries = queries[batch_start:batch_end]
@@ -135,15 +137,19 @@ def main_align(store,
                     if (is_within_range_of_any_element(returned_unit["index"], series, exactness) and match) or \
                         abs(smallest_distance + 2 * len(returned_unit["query"])) < distance_bound + 1:
                         finer_flag[batch_start + i, 0] = 1
+                        smallest_distances.append(smallest_distance)
                     else:
                         finer_flag[batch_start + i, 0] = 0
                 else:
                     if ((returned_unit["index"] in series) and match) or \
                         abs(smallest_distance + 2 * len(returned_unit["query"])) < 1:
                             finer_flag[batch_start + i, 0] = 1
+                            smallest_distances.append(smallest_distance)
+
                     else:
                         finer_flag[batch_start + i, 0] = 0
-
+                        
+        print("SW distance", np.mean(smallest_distances))
         return finer_flag[:num_queries, 0]
     
     else: # recall - hotstart
@@ -181,12 +187,16 @@ def main_align(store,
                     if (is_within_range_of_any_element(returned_unit["index"], series, exactness) and match) or \
                         abs(smallest_distance + 2 * len(returned_unit["query"])) < distance_bound + 1:
                         finer_flag[batch_start + i, 0] = 1
+                        smallest_distances.append(smallest_distance)
+
                     else:
                         finer_flag[batch_start + i, 0] = 0
                 else:
                     if ((returned_unit["index"] in series) and match) or \
                         abs(smallest_distance + 2 * len(returned_unit["query"])) < 1:
                             finer_flag[batch_start + i, 0] = 1
+                            smallest_distances.append(smallest_distance)
+
                     else:
                         finer_flag[batch_start + i, 0] = 0
 
@@ -196,6 +206,7 @@ def main_align(store,
         if dictionary_of_values is not None:
             return [finer_flag[:num_queries, 0], dictionary_of_values]
         
+        print("SW distance", np.mean(smallest_distances))
         return finer_flag[:num_queries, 0]
 
 
@@ -329,7 +340,7 @@ def pick_random_lines(path:str = "/home/pholur/dna2vec/tests/data/subsequences_s
     elif mode == "subsequenced":
 
         if k % sequences_prior != 0:
-            print("k does not divide perfetly by sequences_prior resulting in fewer samples.")
+            print("k does not divide perfectly by sequences_prior resulting in fewer samples.")
         
         random_lines = []
         real_k = k // sequences_prior

@@ -18,13 +18,17 @@ def minimap2_align(reference_index, reads_list, path_to_minimap_folder, output_s
     #     f.write(">Reference\n" + reference_index + "\n")
 
     # Create a temporary FASTQ file to store the reads
-    temp_fastq = "temp_reads.fastq"
-    with open(temp_fastq, "w") as f:
-        for i, read in enumerate(reads_list):
-            f.write(f"@read_{i}\n{read}\n+\n{'I'*len(read)}\n")  # Assuming all reads have the same length
+    if isinstance(reads_list, list):
+        temp_fastq = "temp_reads.fastq"
+        with open(temp_fastq, "w") as f:
+            for i, read in enumerate(reads_list):
+                f.write(f"@read_{i}\n{read}\n+\n{'I'*len(read)}\n")  # Assuming all reads have the same length
+        minimap2_command = f"{path_to_minimap_folder}/minimap2/minimap2 -ax sr -B 30 -O 30 -E 5 {reference_index} {temp_fastq} > {output_sam}"
+
+    else:
+        minimap2_command = f"{path_to_minimap_folder}/minimap2/minimap2 -ax sr -B 5 -O 30 -E 30 {reference_index} {reads_list} > {output_sam}"
 
     # Command to run minimap2 alignment
-    minimap2_command = f"{path_to_minimap_folder}/minimap2/minimap2 -ax sr {reference_index} {temp_fastq} > {output_sam}"
 
     try:
         # Execute minimap2 command using subprocess
@@ -48,4 +52,5 @@ def minimap2_align(reference_index, reads_list, path_to_minimap_folder, output_s
 
     finally:
         # Remove the temporary files
-        subprocess.run(f"rm {temp_fastq}", shell=True, check=True)
+        if isinstance(reads_list, list):
+            subprocess.run(f"rm {temp_fastq}", shell=True, check=True)

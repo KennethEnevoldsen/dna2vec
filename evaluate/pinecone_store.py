@@ -41,7 +41,7 @@ class PineconeStore:
             )
 
         if "config-" in index_name: # premium account
-            self.api_key = "ded0a046-d0fe-4f8a-b45c-1d6274ad555e"
+            self.api_key = "00807be7-ec64-48bd-9d62-67232f4c7032"
             self.environment = "us-west4-gcp"
             
         else:
@@ -73,7 +73,7 @@ class PineconeStore:
                 name=index_name,
                 dimension=dimension,
                 metric=metric,
-                pod_type="s1.x4"
+                pod_type="s1.x8"
             )
 
         # now connect to the index

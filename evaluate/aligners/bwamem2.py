@@ -14,14 +14,18 @@ def bwa_mem2_align(reference_index, reads_list, path_to_bwa_folder, output_sam, 
     """
     
     # Create a temporary FASTQ file to store the reads
-    temp_fastq = "temp_reads.fastq"
-    with open(temp_fastq, "w") as f:
-        for i, read in enumerate(reads_list):
-            f.write(f"@read_{i}\n{read}\n+\n{'I'*len(read)}\n")  # Assuming all reads have the same length
+    if isinstance(reads_list, list):
+        print("Here")
+        temp_fastq = "temp_reads.fastq"
+        with open(temp_fastq, "w") as f:
+            for i, read in enumerate(reads_list):
+                f.write(f"@read_{i}\n{read}\n+\n{'I'*len(read)}\n")  # Assuming all reads have the same length
 
-    # Command to run BWA-MEM2 alignment
-    bwa_mem2_command = f"{path_to_bwa_folder}/bwa-mem2-2.2.1_x64-linux/bwa-mem2 mem -t {threads} {reference_index} {temp_fastq} > {output_sam}"
-
+        # Command to run BWA-MEM2 alignment
+        bwa_mem2_command = f"{path_to_bwa_folder}/bwa-mem2-2.2.1_x64-linux/bwa-mem2 mem -k 50 -A 200 -B 200 -O 300 -E 150 -L 0 -t {threads} {reference_index} {temp_fastq} > {output_sam}"
+    else:
+        bwa_mem2_command = f"{path_to_bwa_folder}/bwa-mem2-2.2.1_x64-linux/bwa-mem2 mem -k 50 -A 200 -B 200 -O 300 -E 150 -L 0 -t {threads} {reference_index} {reads_list} > {output_sam}"
+        
     try:
         # Execute BWA-MEM2 command using subprocess
         subprocess.run(bwa_mem2_command, shell=True, check=True)
@@ -44,4 +48,5 @@ def bwa_mem2_align(reference_index, reads_list, path_to_bwa_folder, output_sam, 
 
     finally:
         # Remove the temporary FASTQ file
-        subprocess.run(f"rm {temp_fastq}", shell=True, check=True)
+        if isinstance(reads_list, list):
+            subprocess.run(f"rm {temp_fastq}", shell=True, check=True)

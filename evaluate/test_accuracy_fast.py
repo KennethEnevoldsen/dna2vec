@@ -43,12 +43,12 @@ from pinecone_store import PineconeStore
 
 
 grid = {
-    "read_length": [100, 150], #[150, 300, 500],
-    "insertion_rate": [0.0, 0.01],
-    "deletion_rate" : [0.0, 0.01],
-    "qq": [(30,60), (60,90)], # https://www.illumina.com/documents/products/technotes/technote_Q-Scores.pdf
-    "topk": [1250], #[50, 100],
-    "distance_bound": [5],
+    "read_length": [250],#100, 150], #[150, 300, 500],
+    "insertion_rate": [0.1],#0.0, 0.01],
+    "deletion_rate" : [0.1],#0.0, 0.01],
+    "qq": [(10,20)],#(30,60), (60,90)], # https://www.illumina.com/documents/products/technotes/technote_Q-Scores.pdf
+    "topk": [1250],#1250], #[50, 100],
+    "distance_bound": [30],
     "exactness": [2]
 }
 
@@ -159,10 +159,12 @@ if __name__ == "__main__":
             results = main_align(store, queries, ground_truth, topk, 
                                  exactness=exactness, distance_bound=distance_bound, 
                                  flex = True, distributed=distributed, per_k=per_k, namespaces=meta, namespace_dict=meta_data_map)
-            
+            print(results)
             total_perf = np.mean(results)
+            print(total_perf)
+            # exit()
             # print(f"{str(quality).replace(',',';')},{read_length},{insertion_rate},{deletion_rate},{topk},{distance_bound},{exactness},{total_perf}\n")
             # exit()
-            f.write(f"{str(quality).replace(',',';')},{read_length},{insertion_rate},{deletion_rate},{topk},{distance_bound},{exactness},{total_perf}\n")
-            f.flush()
+            # f.write(f"{str(quality).replace(',',';')},{read_length},{insertion_rate},{deletion_rate},{topk},{distance_bound},{exactness},{total_perf}\n")
+            # f.flush()
     f.close()

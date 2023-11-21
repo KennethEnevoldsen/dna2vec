@@ -1,3 +1,7 @@
+"""
+THIS FUNCTION DOES NOT WORK WITH NAMESPACED VECTOR STORES
+"""
+
 import sys
 sys.path.append("../src/")
 sys.path.append("../evaluate/")
@@ -16,6 +20,7 @@ from aligners.smith_waterman import bwamem_align_parallel, bwamem_align, bwamem_
 
 parser = argparse.ArgumentParser(description="Permute evaluate")
 parser.add_argument('--recipes', type=str)
+parser.add_argument('--fasta', type=str, default="SAME")
 parser.add_argument('--checkpoints', type=str)
 parser.add_argument('--generalize', type=int)
 parser.add_argument('--test_k', type=int)
@@ -96,11 +101,16 @@ if __name__ == "__main__":
     for (store, data_alias, config) in initialize_pinecone(checkpoint_queue, data_queue, args.device):
         list_of_data_sources = []
         sources = data_alias.split(",")
-        for source in sources:
-            if source in data_recipes:
-                list_of_data_sources.append(data_recipes[source])
-            else:
-                list_of_data_sources.append(source)
+        
+        if args.fasta == "SAME":
+            for source in sources:
+                if source in data_recipes:
+                    list_of_data_sources.append(data_recipes[source])
+                else:
+                    list_of_data_sources.append(source)
+        else: # for negative sampling
+            for source in sources:
+                list_of_data_sources.append(data_recipes[args.fasta])
         
         for topk in args.topk.split(";"):       
             main(list_of_data_sources, 
