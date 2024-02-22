@@ -2,13 +2,16 @@ from pathlib import Path
 
 import torch
 
-from dna2vec.config_schema import (ConfigSchema,
-                                   DatasetConfigSchemaUniformSampling,
-                                   SchedulerConfigSchema, TrainingConfigSchema)
+from dna2vec.config_schema import (
+    ConfigSchema,
+    DatasetConfigSchemaUniformSampling,
+    SchedulerConfigSchema,
+    TrainingConfigSchema,
+)
 from dna2vec.dataset import FastaUniformSampler
 from dna2vec.main import main
 
-device = torch.device("cuda:5")
+device = torch.device("cuda:0")
 CONFIG = ConfigSchema(
     training_config=TrainingConfigSchema(
         max_steps=100_000,
@@ -21,14 +24,14 @@ CONFIG = ConfigSchema(
         ),
     ),
     dataset_config=DatasetConfigSchemaUniformSampling(
-        fasta_file = [Path("/mnt/SSD2/pholur/General_Models/data/all/chm13v2.0.fa")], 
-        range_min = 800,
-        range_max = 2000,
-        subsequence_range_min = 80,
-        subsequence_range_max = 180, 
+        fasta_file=[Path("/mnt/SSD1/shreyas/dna2vec/data/chm13v2.0.fa")],
+        range_min=800,
+        range_max=2000,
+        subsequence_range_min=80,
+        subsequence_range_max=250,
         dataset=FastaUniformSampler,
         sampling_strategy="random_subsequence_uppercase",
-        ),
+    ),
 )
 
 
