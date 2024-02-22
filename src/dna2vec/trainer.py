@@ -17,6 +17,7 @@ from dna2vec.model import model_from_config
 
 from dna2vec.tokenizer import BPTokenizer
 
+
 class ContrastiveTrainer:
     def __init__(
         self,
@@ -44,7 +45,6 @@ class ContrastiveTrainer:
         self.best_loss = float("inf")
 
         self.training_config = config.training_config
-
 
     def model_to_device(self, device: Optional[torch.device] = None) -> None:
         """
@@ -75,7 +75,6 @@ class ContrastiveTrainer:
             log_interval: Number of steps after which to log the training loss
         """
 
-
         self.model_to_device()
         self.encoder.train()
         for step, (x_1, x_2) in enumerate(self.train_dataloader):
@@ -85,16 +84,15 @@ class ContrastiveTrainer:
             if max_steps is not None and step >= max_steps:
                 break
 
-
-            last_hidden_x_1 = self.encoder(**x_1) # long sequence
-            last_hidden_x_2 = self.encoder(**x_2) # subsequence
+            last_hidden_x_1 = self.encoder(**x_1)  # long sequence
+            last_hidden_x_2 = self.encoder(**x_2)  # subsequence
             y_1 = self.pooling(last_hidden_x_1, attention_mask=x_1["attention_mask"])
             y_2 = self.pooling(last_hidden_x_2, attention_mask=x_2["attention_mask"])
 
             # Calculate similarity
             # y_1 # names: [batch, embedding]
             # y_2 # names: [batch, embedding]
-            sim = self.similarity(y_1.unsqueeze(1), y_2.unsqueeze(0)) # outer-product
+            sim = self.similarity(y_1.unsqueeze(1), y_2.unsqueeze(0))  # outer-product
 
             labels = torch.arange(sim.size(0)).long().to(self.device)
 
@@ -104,14 +102,12 @@ class ContrastiveTrainer:
             loss.backward()
             if (step + 1) % self.training_config.accumulation_steps == 0:
                 # Gradient clipping
-                torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), self.training_config.max_grad_norm) # type: ignore
+                torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), self.training_config.max_grad_norm)  # type: ignore
 
                 self.optimizer.step()
                 self.optimizer.zero_grad()
                 self.scheduler.step()
 
-
-        
             if step % log_interval == 0:
                 current_lr = self.optimizer.param_groups[0]["lr"]
                 wandb.log({"loss": loss, "step": step, "lr": current_lr})
@@ -120,7 +116,6 @@ class ContrastiveTrainer:
             if loss < self.best_loss:
                 self.best_loss = loss
                 self.save_to_disk()
-
 
             # trying to resolve the CUDA out of memory error
             if step % 1000 == 0:
@@ -155,7 +150,7 @@ class ContrastiveTrainer:
 
     @staticmethod
     def load_from_disk(path: str) -> "ContrastiveTrainer":
-    
+
         checkpoint = torch.load(path)
         config = checkpoint["config"]
         encoder, pooling, tokenizer = model_from_config(config.model_config)
@@ -180,7 +175,9 @@ class ContrastiveTrainer:
         opt_kwargs = train_cfg.optimizer_config.dict()
         optimizer_ = train_cfg.optimizer(encoder.parameters(), **opt_kwargs)
         optimizer_.load_state_dict(optimizer_state)
-        scheduler_ = train_cfg.scheduler(optimizer_, **train_cfg.scheduler_config.dict())
+        scheduler_ = train_cfg.scheduler(
+            optimizer_, **train_cfg.scheduler_config.dict()
+        )
         scheduler_.load_state_dict(scheduler_state)
 
         trainer = ContrastiveTrainer(
@@ -195,7 +192,5 @@ class ContrastiveTrainer:
             config=config,
             tokenizer=tokenizer,
         )
-        
+
         return trainer
-
-
