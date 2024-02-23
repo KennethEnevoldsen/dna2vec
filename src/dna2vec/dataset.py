@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, Literal, Tuple
+from typing import Dict, List, Literal, Tuple, Union
 
 import torch
 from torch.utils.data import IterableDataset
@@ -129,6 +129,66 @@ class FastaSamplerDataset(IterableDataset):
             raise ValueError(
                 f"Sampling strategy {self.sampling_strategy} not implemented"
             )
+
+
+class FastaUniformSampler(IterableDataset):
+    def __init__(
+        self,
+        range_min: int,
+        range_max: int,
+        subsequence_range_min: int,
+        subsequence_range_max: int,
+        fasta_file: Union[Path, List[Path]],
+        sampling_strategy: Literal["random_subsequence", "random_subsequence_uppercase"] = "random_subsequence",
+    ):
+        super().__init__()
+        self.range_min = range_min
+        self.range_max = range_max
+        self.subsequence_range_min = subsequence_range_min
+        self.subsequence_range_max = subsequence_range_max
+
+        if isinstance(fasta_file, Path):
+            fasta_file = [fasta_file]
+        self.fasta_file = fasta_file
+
+        # load in text file and concatenate
+        files = []
+        self.text = ""
+        for path in self.fasta_file:
+            with open(path, "r") as f:
+                self.text += f.read()
+
+        self.len_text = len(self.text)
+        self.sampling_strategy = sampling_strategy
+
+
+    def iter_random_subsequence(self):
+        while True:
+            L_1 = torch.randint(self.range_min, self.range_max, (1,)).int()
+            i_1 = torch.randint(low=0, high=int(self.len_text) - int(L_1), size= (1,))
+            x_1 = self.text[i_1 : i_1 + L_1]
+
+            # sample lengh of second sequence
+            L_2 = torch.randint(self.subsequence_range_min, self.subsequence_range_max, (1,)).int()
+            # sample the start of the second sequence from the first sequence [0, L_1 - L_2]
+            i_2 = torch.randint(0, int(L_1 - L_2), (1,))
+            x_2 = x_1[i_2 : i_2 + L_2]
+            yield x_1, x_2
+
+    def iter_random_subsequence_uppercase(self):
+        for x_1, x_2 in self.iter_random_subsequence():
+            yield x_1.upper(), x_2.upper()
+
+    def __iter__(self):
+        if self.sampling_strategy == "random_subsequence":
+            return self.iter_random_subsequence()
+        elif self.sampling_strategy == "random_subsequence_uppercase":
+            return self.iter_random_subsequence_uppercase()
+        else:
+            raise ValueError(
+                f"Sampling strategy {self.sampling_strategy} not implemented"
+            )
+        
 
 
 

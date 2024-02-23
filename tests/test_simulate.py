@@ -112,3 +112,4 @@ def test_simulate_reads():
 
     m_read = mapped_reads[0]
     assert isinstance(m_read, ReadAndReference)
+    assert m_read.id is not None
