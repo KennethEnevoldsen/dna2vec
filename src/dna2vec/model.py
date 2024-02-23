@@ -76,7 +76,7 @@ class Encoder(nn.Module):
         activation: Literal["relu", "gelu"] = "gelu",
         pos_embedding: Type[nn.Module] = SinusoidalPositionalEncoding,
         max_position_embeddings: int = 1024,
-        add_cls_tokens: bool = False,
+        add_sequence_type_cls_tokens: bool = False,
     ):
         """
         Default values taken from miniLM v6
@@ -95,7 +95,7 @@ class Encoder(nn.Module):
             max_len=max_position_embeddings,
         )
 
-        if add_cls_tokens:
+        if add_sequence_type_cls_tokens:
             num_embeddings = vocab_size + 2
             self.cls_fragment_index = vocab_size
             self.cls_read_index = vocab_size + 1
@@ -130,7 +130,7 @@ class Encoder(nn.Module):
     ) -> torch.Tensor:
         # input_ids.names = ["batch", "sequence"]
         # embedding does not support named tensors
-        add_cls_token_type = (self.cls_fragment_index is not None and self.cls_read_index is not None)
+        add_sequence_type_cls_token = (self.cls_fragment_index is not None and self.cls_read_index is not None)
 
             
 
@@ -140,7 +140,7 @@ class Encoder(nn.Module):
         )
         # emb.names = ["batch", "sequence", "embedding"]
 
-        if add_cls_token_type:
+        if add_sequence_type_cls_token:
             # since we already have a CLS token, we will just update the CLS token with the type information
 
             # fetch the index
