@@ -22,6 +22,7 @@ CONFIG = ConfigSchema(
         scheduler_config=SchedulerConfigSchema(
             max_lr=1e-4,
         ),
+        regularizer=0.3,
     ),
     dataset_config=DatasetConfigSchemaUniformSampling(
         fasta_file=[Path("/mnt/SSD1/shreyas/dna2vec/data/chm13v2.0.fa")],
@@ -31,6 +32,7 @@ CONFIG = ConfigSchema(
         subsequence_range_max=250,
         dataset=FastaUniformSampler,
         sampling_strategy="random_subsequence_uppercase",
+        read_regularizer=True,
     ),
 )
 

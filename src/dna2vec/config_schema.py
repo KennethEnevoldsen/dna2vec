@@ -16,9 +16,11 @@ from dna2vec.dataset import FastaSamplerDataset
 from dna2vec.model import AveragePooler, SinusoidalPositionalEncoding
 from dna2vec.similarity import SimilarityWithTemperature
 
-scheduler = partial(OneCycleLR, 
-                       max_lr = 1e-4, # Upper learning rate boundaries in the cycle for each parameter group
-                       anneal_strategy = 'cos')
+scheduler = partial(
+    OneCycleLR,
+    max_lr=1e-4,  # Upper learning rate boundaries in the cycle for each parameter group
+    anneal_strategy="cos",
+)
 
 project_path = Path(__file__).parent.parent.parent
 tokenizer_path = (
@@ -38,7 +40,7 @@ class ModelConfigSchema(BaseModel):
     pooling: nn.Module = AveragePooler()
     max_position_embeddings: int = 1024
     tokenizer_path: Path = tokenizer_path
-    model_path: Optional[Path] = None # where to load the model from
+    model_path: Optional[Path] = None  # where to load the model from
 
     class Config:
         arbitrary_types_allowed = True
@@ -50,12 +52,11 @@ class OptimizerConfigSchema(BaseModel):
     weight_decay: float = 0.01
     eps = 1e-8
 
+
 class SchedulerConfigSchema(BaseModel):
     max_lr: float = 1e-4
     anneal_strategy: Literal["cos", "linear", "polynomial", "constant"] = "cos"
-    total_steps: Optional[int] =None # derived from training config
-
-
+    total_steps: Optional[int] = None  # derived from training config
 
 
 class TrainingConfigSchema(BaseModel):
@@ -70,6 +71,7 @@ class TrainingConfigSchema(BaseModel):
     scheduler: Type[LRScheduler] = OneCycleLR
     scheduler_config: SchedulerConfigSchema = SchedulerConfigSchema()
     save_path: Path = project_path / "models"
+    regularizer: float = 0.0
 
     max_steps: int = 1000
     log_interval: int = 100
@@ -91,6 +93,7 @@ class DatasetConfigSchemaUniformSampling(BaseDatasetConfigSchema):
     subsequence_range_min = 100
     subsequence_range_max = 500
     sampling_strategy: str = "random_subsequence"
+    read_regularizer: bool = False
 
 
 class DatasetConfigSchema(BaseDatasetConfigSchema):
@@ -107,5 +110,3 @@ class ConfigSchema(BaseModel):
     model_config: ModelConfigSchema = ModelConfigSchema()
     training_config: TrainingConfigSchema = TrainingConfigSchema()
     dataset_config: BaseDatasetConfigSchema = DatasetConfigSchema()
-
-

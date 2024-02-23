@@ -62,6 +62,7 @@ def main(config: ConfigSchema, wandb_mode: str = "online", watch_watch: bool = F
         scheduler=scheduler,
         config=config,
         tokenizer=tokenizer,
+        regularizer=training_cfg.regularizer,
     )
 
     # log config to wandb

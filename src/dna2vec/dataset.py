@@ -13,7 +13,9 @@ class FastaSamplerDataset(IterableDataset):
         subsequence_range_mean: float,
         subsequence_range_std: float,
         fasta_file: Path,
-        sampling_strategy: Literal["local", "subsequence", "random_subsequence"] = "random_subsequence",
+        sampling_strategy: Literal[
+            "local", "subsequence", "random_subsequence"
+        ] = "random_subsequence",
     ):
         super().__init__()
         self.range_mean = range_mean
@@ -94,9 +96,9 @@ class FastaSamplerDataset(IterableDataset):
 
             yield x_1, x_2
 
-
-
-    def iter_random_subsequence(self, subsequence_mean_length: int=200, subsequence_std_length: int=20):
+    def iter_random_subsequence(
+        self, subsequence_mean_length: int = 200, subsequence_std_length: int = 20
+    ):
         """
         differs from iter_subsequence in that the second sequence does not try to capture the longest sequence
         but rather samples a random subsequence from the first sequence
@@ -104,19 +106,18 @@ class FastaSamplerDataset(IterableDataset):
 
         while True:
             L_1 = torch.normal(self.range_mean, self.range_std, (1,)).int()
-            i_1 = torch.randint(0, int(self.len_text-L_1), (1,))
+            i_1 = torch.randint(0, int(self.len_text - L_1), (1,))
 
             # sample lengh of second sequence
-            L_2 = torch.normal(subsequence_mean_length, subsequence_std_length, (1,)).int()
+            L_2 = torch.normal(
+                subsequence_mean_length, subsequence_std_length, (1,)
+            ).int()
             # sample the start of the second sequence from the first sequence [0, L_1 - L_2]
             i_2 = torch.randint(0, int(L_1 - L_2), (1,))
 
             x_1 = self.text[i_1 : i_1 + L_1]
             x_2 = x_1[i_2 : i_2 + L_2]
             yield x_1, x_2
-            
-
-
 
     def __iter__(self):
         if self.sampling_strategy == "local":
@@ -124,7 +125,9 @@ class FastaSamplerDataset(IterableDataset):
         elif self.sampling_strategy == "subsequence":
             return self.iter_subsequence()
         elif self.sampling_strategy == "random_subsequence":
-            return self.iter_random_subsequence(self.subsequence_range_mean, self.subsequence_range_std)
+            return self.iter_random_subsequence(
+                self.subsequence_range_mean, self.subsequence_range_std
+            )
         else:
             raise ValueError(
                 f"Sampling strategy {self.sampling_strategy} not implemented"
@@ -139,13 +142,17 @@ class FastaUniformSampler(IterableDataset):
         subsequence_range_min: int,
         subsequence_range_max: int,
         fasta_file: Union[Path, List[Path]],
-        sampling_strategy: Literal["random_subsequence", "random_subsequence_uppercase"] = "random_subsequence",
+        sampling_strategy: Literal[
+            "random_subsequence", "random_subsequence_uppercase"
+        ] = "random_subsequence",
+        read_regularizer: bool = False,
     ):
         super().__init__()
         self.range_min = range_min
         self.range_max = range_max
         self.subsequence_range_min = subsequence_range_min
         self.subsequence_range_max = subsequence_range_max
+        self.read_regularizer = read_regularizer
 
         if isinstance(fasta_file, Path):
             fasta_file = [fasta_file]
@@ -161,35 +168,50 @@ class FastaUniformSampler(IterableDataset):
         self.len_text = len(self.text)
         self.sampling_strategy = sampling_strategy
 
-
     def iter_random_subsequence(self):
         while True:
+            # Sample the fragment
             L_1 = torch.randint(self.range_min, self.range_max, (1,)).int()
-            i_1 = torch.randint(low=0, high=int(self.len_text) - int(L_1), size= (1,))
+            i_1 = torch.randint(low=0, high=int(self.len_text) - int(L_1), size=(1,))
             x_1 = self.text[i_1 : i_1 + L_1]
 
-            # sample lengh of second sequence
-            L_2 = torch.randint(self.subsequence_range_min, self.subsequence_range_max, (1,)).int()
+            # sample the read
+            L_2 = torch.randint(
+                self.subsequence_range_min, self.subsequence_range_max, (1,)
+            ).int()
             # sample the start of the second sequence from the first sequence [0, L_1 - L_2]
             i_2 = torch.randint(0, int(L_1 - L_2), (1,))
             x_2 = x_1[i_2 : i_2 + L_2]
-            yield x_1, x_2
+
+            # Empty string to handle the case where the read regularizer is not used
+            x_3 = ""
+
+            # Sample another sequence
+            if self.read_regularizer:
+                i3 = torch.randint(0, int(L_1 - L_2), (1,))
+                x_3 = x_1[i3 : i3 + L_2]
+
+            yield x_1, (x_2, x_3)
 
     def iter_random_subsequence_uppercase(self):
-        for x_1, x_2 in self.iter_random_subsequence():
-            yield x_1.upper(), x_2.upper()
+
+        for x_1, x_23 in self.iter_random_subsequence():
+
+            x_2, x_3 = x_23
+
+            yield x_1.upper(), x_2.upper(), x_3.upper()
 
     def __iter__(self):
         if self.sampling_strategy == "random_subsequence":
             return self.iter_random_subsequence()
+
         elif self.sampling_strategy == "random_subsequence_uppercase":
             return self.iter_random_subsequence_uppercase()
+
         else:
             raise ValueError(
                 f"Sampling strategy {self.sampling_strategy} not implemented"
             )
-        
-
 
 
 def collate_fn(
@@ -200,8 +222,16 @@ def collate_fn(
     ids = matrix of shape (batch_size, max_sequence_length)
     attention_mask = matrix of shape (batch_size, max_sequence_length)
     """
-    x_1, x_2 = list(zip(*batch))
-    x_1 = tokenizer.tokenize(x_1)
-    x_2 = tokenizer.tokenize(x_2)
 
-    return x_1.to_torch(), x_2.to_torch()
+    x_1, x_23 = list(zip(*batch))
+    x_2, x_3 = x_23
+
+    x1 = tokenizer.tokenize(x_1)
+    x2 = tokenizer.tokenize(x_2)
+
+    if x_3 != "":
+        x3 = tokenizer.tokenize(x_3)
+    else:
+        x3 = None
+
+    return x1.to_torch(), x2.to_torch(), x3.to_torch() if x3 else None
