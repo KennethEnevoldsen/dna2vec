@@ -31,6 +31,7 @@ class ContrastiveTrainer:
         device: torch.device,
         config: ConfigSchema,
         tokenizer: BPTokenizer,
+        regularizer: float = 0,  # Regularizer weight, set to 0 to disable
     ):
         self.encoder = encoder
         self.loss = loss
@@ -43,6 +44,7 @@ class ContrastiveTrainer:
         self.config = config
         self.tokenizer = tokenizer
         self.best_loss = float("inf")
+        self.regularizer = regularizer
 
         self.training_config = config.training_config
 
@@ -77,7 +79,9 @@ class ContrastiveTrainer:
 
         self.model_to_device()
         self.encoder.train()
-        for step, (x_1, x_2) in enumerate(self.train_dataloader):
+        for step, (x_1, x_23) in enumerate(self.train_dataloader):
+
+            x_2, x_3 = x_23
             self.dict_to_device(x_1)
             self.dict_to_device(x_2)
 
@@ -89,14 +93,32 @@ class ContrastiveTrainer:
             y_1 = self.pooling(last_hidden_x_1, attention_mask=x_1["attention_mask"])
             y_2 = self.pooling(last_hidden_x_2, attention_mask=x_2["attention_mask"])
 
+            if x_3:
+                self.dict_to_device(x_3)
+                last_hidden_x_3 = self.encoder(**x_3)
+                y_3 = self.pooling(
+                    last_hidden_x_3, attention_mask=x_3["attention_mask"]
+                )
+
             # Calculate similarity
             # y_1 # names: [batch, embedding]
             # y_2 # names: [batch, embedding]
+
+            # batch x 1 x embedding y1 , 1 x batch x embedding y2 - > batch x batch
             sim = self.similarity(y_1.unsqueeze(1), y_2.unsqueeze(0))  # outer-product
 
             labels = torch.arange(sim.size(0)).long().to(self.device)
 
             loss = self.loss(sim, labels)
+
+            # Compute similarity score between y2 and y3 and add to loss
+            if x_3:
+                sim_23 = self.similarity(y_2.unsqueeze(1), y_3.unsqueeze(0))
+                # Take the diagonal of the similarity matrix and sum the terms to add to the loss
+                sim_23 = torch.diag(sim_23)
+                sim_23 = torch.sum(sim_23) / sim_23.size(0)
+                max_sim = 0.8  # Hyperparameter that determines the maximum similarity score between the two reads
+                loss += (max_sim - sim_23) * self.regularizer if sim_23 < max_sim else 0
 
             loss = loss / self.training_config.accumulation_steps
             loss.backward()
@@ -120,7 +142,6 @@ class ContrastiveTrainer:
             # trying to resolve the CUDA out of memory error
             if step % 1000 == 0:
                 torch.cuda.empty_cache()
-
             # delete the tensors: https://discuss.pytorch.org/t/gpu-memory-consumption-increases-while-training/2770/3?u=nagabhushansn95
             del y_1, y_2, sim, labels, loss
             for k, v in x_1.items():
@@ -191,6 +212,7 @@ class ContrastiveTrainer:
             similarity=sim,
             config=config,
             tokenizer=tokenizer,
+            regularizer=train_cfg.regularizer,
         )
 
         return trainer
