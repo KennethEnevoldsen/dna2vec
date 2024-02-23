@@ -1,8 +1,9 @@
 """
 A implementation of the contrastive siamese architecture from sentence transformers to learn DNA embeddings.
 """
+
 import math
-from typing import Dict, Literal, Optional, Tuple, Type
+from typing import Literal, Optional, Tuple, Type
 
 import torch
 import torch.nn as nn
@@ -75,6 +76,7 @@ class Encoder(nn.Module):
         activation: Literal["relu", "gelu"] = "gelu",
         pos_embedding: Type[nn.Module] = SinusoidalPositionalEncoding,
         max_position_embeddings: int = 1024,
+        add_cls_tokens: bool = False,
     ):
         """
         Default values taken from miniLM v6
@@ -93,10 +95,20 @@ class Encoder(nn.Module):
             max_len=max_position_embeddings,
         )
 
+        if add_cls_tokens:
+            num_embeddings = vocab_size + 2
+            self.cls_fragment_index = vocab_size
+            self.cls_read_index = vocab_size + 1
+        else:
+            num_embeddings = vocab_size
+            self.cls_fragment_index = None
+            self.cls_read_index = None
+            
         self.embedding = nn.Embedding(
-            num_embeddings=vocab_size,
+            num_embeddings=num_embeddings,
             embedding_dim=embedding_dim,
         )
+
 
         # create encode layers
         encoder_layer = nn.TransformerEncoderLayer(
@@ -111,18 +123,36 @@ class Encoder(nn.Module):
         self.trf_encoder = nn.TransformerEncoder(
             encoder_layer=encoder_layer, num_layers=num_layers
         )
+        
 
     def forward(
-        self, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor]=None
+        self, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor]=None, sequence_type: Literal["read", "fragment"] = "read"
     ) -> torch.Tensor:
         # input_ids.names = ["batch", "sequence"]
         # embedding does not support named tensors
+        add_cls_token_type = (self.cls_fragment_index is not None and self.cls_read_index is not None)
+
+            
 
         # Embed
         emb = self.emb_dropout(
             self.embedding(input_ids) + self.positional_embedding(input_ids)
         )
         # emb.names = ["batch", "sequence", "embedding"]
+
+        if add_cls_token_type:
+            # since we already have a CLS token, we will just update the CLS token with the type information
+
+            # fetch the index
+            cls_index = self.cls_fragment_index if sequence_type == "fragment" else self.cls_read_index
+            # convert to tensor
+            cls_index = torch.tensor(cls_index, device=input_ids.device)
+            # reshape to match the input_ids (batch size, 1, embedding dim)
+            cls_index = cls_index.expand(input_ids.shape[0], 1)
+            cls_emb = self.embedding(cls_index) # (batch size, 1, embedding dim)
+            
+            # update the CLS token
+            emb[:, 0, :] = cls_emb.squeeze(1) # (batch size, embedding dim)
 
         # Contextualize embeddings
         attn = None
