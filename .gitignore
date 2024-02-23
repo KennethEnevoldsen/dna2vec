@@ -18,3 +18,10 @@ data/NC_000002.12.txt
 
 models
 tests/test_models
+
+# paper
+
+data/visualizations/*
+docs/*
+docs/examples/embedding_space.ipynb
+docs/examples/embedding_space.ipynb
