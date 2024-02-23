@@ -36,6 +36,7 @@ class ReadAndReference:
 
     read: AlignedSegment
     reference: Union[str, None] = None
+    id: Union[str, None] = None
 
     def is_mapped(self) -> bool:
         return self.reference is not None
@@ -58,6 +59,7 @@ def simulate_reads_to_disk(
     reference_genome: Union[Path, None] = None,
     insertion_rate: float = 0.00009,
     deletion_rate: float = 0.00011,
+    quality: Tuple[int, int] = (60,93),
     sequencing_system: SEQUENCE_SYSTEMS = "HS20",
 ) -> Path:
     """
@@ -94,6 +96,10 @@ def simulate_reads_to_disk(
         _format_scientific_notation(insertion_rate),
         "--delRate",
         _format_scientific_notation(deletion_rate),
+        "--minQ",
+        str(quality[0]),
+        "--maxQ",
+        str(quality[1])
     ]
     logging.info(f"Running ART with the following command: {' '.join(cmd)}")
 
@@ -116,25 +122,22 @@ def load_simulated_reads_from_disk(
     """
     logging.info(f"Reading simulated reads from {simulated_path}")
 
-    fastq = simulated_path.with_suffix(".fq")
     sam = simulated_path.with_suffix(".sam")
 
     # load using pysam
     aligned_segments = pysam.AlignmentFile(str(sam))
-
     return list(aligned_segments)
 
 
 def map_reads_to_reference(
     reads: List[AlignedSegment],
-    reference: Optional[FastaIterator] = None,
-):
+    reference: Optional[Path] = None,
+) -> List[ReadAndReference]:
     """
     Map a read to a reference genome.
     """
-    if reference is None:
-        reference = load_human_reference_genome()
-
+    reference = load_human_reference_genome(reference)
+    
     id2read = defaultdict(list)
     unmapped_reads = []
     for read in reads:
@@ -144,6 +147,7 @@ def map_reads_to_reference(
         id2read[_id].append(unmapped_read)
         unmapped_reads.append(unmapped_read)
 
+    seq_offset = 0
     for seq in reference:
         matches = id2read[seq.id]
         for match in matches:
@@ -152,10 +156,31 @@ def map_reads_to_reference(
             length = read.query_length
             original_sequence = seq.seq[start : start + length]
             match.reference = str(original_sequence)
+            match.id = seq.id
+            match.seq_offset = seq_offset
             assert read.query_sequence == read.seq
-
+        seq_offset += len(seq.seq)
     return unmapped_reads
 
+
+def _create_cache_path(
+        n_reads_pr_amplicon: int,
+        read_length: int,
+        insertion_rate: float,
+        deletion_rate: float,
+        quality: Tuple[int, int],
+        sequencing_system: SEQUENCE_SYSTEMS,
+) -> Path:
+    file_name_stubs = ["reads",
+                 f"{n_reads_pr_amplicon}",
+                 f"{read_length}",
+                f"IR{str(insertion_rate).replace('.', '-dot-')}",
+                f"DR{str(deletion_rate).replace('.', '-dot-')}",
+                f"Q{str(quality[0])}-{str(quality[1])}",
+                f"{sequencing_system}"]
+    
+    file_name = "_".join(file_name_stubs)
+    return get_cache_dir() / "simulated_reads" / file_name
 
 def simulate_mapped_reads(
     n_reads_pr_amplicon: int,
@@ -164,36 +189,45 @@ def simulate_mapped_reads(
     deletion_rate: float = 0.00011,
     sequencing_system: SEQUENCE_SYSTEMS = "HS20",
     reference_genome: Union[Path, None] = None,
+    quality: Tuple[int, int] = (60,93)
 ):
     """
     Simulates reads and maps them to the reference genome.
     """
 
-    output_path = (
-        get_cache_dir()
-        / "simulated_reads"
-        / f"reads_{n_reads_pr_amplicon}_{read_length}_{insertion_rate}_{deletion_rate}_{sequencing_system}"
+
+    output_path = _create_cache_path(
+        n_reads_pr_amplicon=n_reads_pr_amplicon,
+        read_length=read_length,
+        insertion_rate=insertion_rate,
+        deletion_rate=deletion_rate,
+        sequencing_system=sequencing_system,
+        quality=quality
     )
+    
     output_path.mkdir(parents=True, exist_ok=True)
 
-    if not output_path.with_suffix(".sam").exists():
-        simulated_reads = simulate_reads_to_disk(
-            n_reads_pr_amplicon=n_reads_pr_amplicon,
-            read_length=read_length,
-            output_path=output_path,
-            reference_genome=reference_genome,
-            insertion_rate=insertion_rate,
-            deletion_rate=deletion_rate,
-            sequencing_system=sequencing_system,
-        )
-    else:
-        logging.info(
-            f"Simulated reads already exists at {output_path}. Loading from disk."
-        )
-        simulated_reads = output_path
+    #if not output_path.with_suffix(".sam").exists():
+    simulated_reads = simulate_reads_to_disk(
+        n_reads_pr_amplicon=n_reads_pr_amplicon,
+        read_length=read_length,
+        output_path=output_path,
+        reference_genome=reference_genome,
+        insertion_rate=insertion_rate,
+        deletion_rate=deletion_rate,
+        sequencing_system=sequencing_system,
+        quality=quality
+    )
+    # else:
+    #     logging.info(
+    #         f"Simulated reads already exists at {output_path}. Loading from disk."
+    #     )
+    #     simulated_reads = output_path
+
 
     mapped_reads = map_reads_to_reference(
         reads=load_simulated_reads_from_disk(simulated_reads),
+        reference=reference_genome
     )
 
     return mapped_reads

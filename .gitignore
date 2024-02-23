@@ -4,6 +4,8 @@
 # pythonn
 *.egg-info
 __pycache__
+*.txt
+
 
 # mac os
 .DS_Store
@@ -15,6 +17,7 @@ __pycache__
 
 wandb
 data/NC_000002.12.txt
+data/subsequences_sample.txt
 
 models
 tests/test_models
@@ -24,4 +27,10 @@ tests/test_models
 data/visualizations/*
 docs/*
 docs/examples/embedding_space.ipynb
-docs/examples/embedding_space.ipynb
+*.pkl
+*.fa*
+data/*
+*test_cache*
+
+*.tgz
+art*
