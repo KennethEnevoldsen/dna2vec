@@ -21,6 +21,12 @@ data/subsequences_sample.txt
 
 models
 tests/test_models
+
+# paper
+
+data/visualizations/*
+docs/*
+docs/examples/embedding_space.ipynb
 *.pkl
 *.fa*
 data/*
@@ -28,6 +34,6 @@ data/*
 
 *.tgz
 art*
+playground.ipynb
 *.conda
 
-playground.ipynb
