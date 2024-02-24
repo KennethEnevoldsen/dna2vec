@@ -23,6 +23,7 @@ CONFIG = ConfigSchema(
             max_lr=1e-4,
         ),
         regularizer=0.3,
+        run_name="read_read_regularization",
     ),
     dataset_config=DatasetConfigSchemaUniformSampling(
         fasta_file=[Path("/mnt/SSD1/shreyas/dna2vec/data/chm13v2.0.fa")],
@@ -37,4 +38,4 @@ CONFIG = ConfigSchema(
 )
 
 
-main(CONFIG, watch_watch=True)
+main(CONFIG, wandb_watch=True)

@@ -1,8 +1,16 @@
 from pathlib import Path
-from typing import Dict, List, Literal, Tuple, Union
+from typing import Dict, List, Literal, Tuple, Union, Optional
+from dataclasses import dataclass
 
 import torch
 from torch.utils.data import IterableDataset
+
+
+@dataclass
+class SubsequenceExample:
+    fragment: str
+    read: Tuple[str, str]
+    read_regularization: Optional[str]
 
 
 class FastaSamplerDataset(IterableDataset):
@@ -173,7 +181,7 @@ class FastaUniformSampler(IterableDataset):
             # Sample the fragment
             L_1 = torch.randint(self.range_min, self.range_max, (1,)).int()
             i_1 = torch.randint(low=0, high=int(self.len_text) - int(L_1), size=(1,))
-            x_1 = self.text[i_1 : i_1 + L_1]
+            fragment = self.text[i_1 : i_1 + L_1]
 
             # sample the read
             L_2 = torch.randint(
@@ -181,25 +189,43 @@ class FastaUniformSampler(IterableDataset):
             ).int()
             # sample the start of the second sequence from the first sequence [0, L_1 - L_2]
             i_2 = torch.randint(0, int(L_1 - L_2), (1,))
-            x_2 = x_1[i_2 : i_2 + L_2]
-
-            # Empty string to handle the case where the read regularizer is not used
-            x_3 = ""
+            read_1 = fragment[i_2 : i_2 + L_2]
 
             # Sample another sequence
             if self.read_regularizer:
                 i3 = torch.randint(0, int(L_1 - L_2), (1,))
-                x_3 = x_1[i3 : i3 + L_2]
+                read_2 = fragment[i3 : i3 + L_2]
 
-            yield x_1, (x_2, x_3)
+                subsequence_example = SubsequenceExample(
+                    fragment, (read_1, read_2), self.read_regularizer
+                )
+
+            else:
+                subsequence_example = SubsequenceExample(
+                    fragment, (read_1), self.read_regularizer
+                )
+
+            yield subsequence_example
 
     def iter_random_subsequence_uppercase(self):
 
-        for x_1, x_23 in self.iter_random_subsequence():
+        for subsequence_example in self.iter_random_subsequence():
 
-            x_2, x_3 = x_23
+            fragment = subsequence_example.fragment
 
-            yield x_1.upper(), x_2.upper(), x_3.upper()
+            if self.read_regularizer:
+                read_1, read_2 = subsequence_example.read
+
+                yield SubsequenceExample(
+                    fragment, (read_1.upper(), read_2.upper()), self.read_regularizer
+                )
+
+            else:
+                read_1 = subsequence_example.read
+
+                yield SubsequenceExample(
+                    fragment, (read_1.upper()), self.read_regularizer
+                )
 
     def __iter__(self):
         if self.sampling_strategy == "random_subsequence":
@@ -223,15 +249,36 @@ def collate_fn(
     attention_mask = matrix of shape (batch_size, max_sequence_length)
     """
 
-    x_1, x_23 = list(zip(*batch))
-    x_2, x_3 = x_23
+    subsequence_batch = batch
 
-    x1 = tokenizer.tokenize(x_1)
-    x2 = tokenizer.tokenize(x_2)
+    fragment = [subsequence_ex.fragment for subsequence_ex in subsequence_batch]
 
-    if x_3 != "":
-        x3 = tokenizer.tokenize(x_3)
+    reads = [subsequence_ex.read for subsequence_ex in subsequence_batch]
+
+    # Check if the regularizer is enabled across the entire batch
+    read_regularization = all(
+        [subsequence_ex.read_regularization for subsequence_ex in subsequence_batch]
+    )
+
+    fragment_tokenized = tokenizer.tokenize(fragment)
+
+    if read_regularization:
+        read_1, read_2 = list(zip(*reads))
+        read_1_tokenized = tokenizer.tokenize(read_1)
+        read_2_tokenized = tokenizer.tokenize(read_2)
+
+        return SubsequenceExample(
+            fragment=fragment_tokenized.to_torch(),
+            read=(read_1_tokenized.to_torch(), read_2_tokenized.to_torch()),
+            read_regularization=True,
+        )
+
     else:
-        x3 = None
+        read_1 = reads
+        read_1_tokenized = tokenizer.tokenize(read_1)
 
-    return x1.to_torch(), x2.to_torch(), x3.to_torch() if x3 else None
+        return SubsequenceExample(
+            fragment=fragment_tokenized.to_torch(),
+            read=(read_1_tokenized.to_torch()),
+            read_regularization=False,
+        )

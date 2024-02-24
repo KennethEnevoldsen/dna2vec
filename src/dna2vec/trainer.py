@@ -79,46 +79,58 @@ class ContrastiveTrainer:
 
         self.model_to_device()
         self.encoder.train()
-        for step, (x_1, x_23) in enumerate(self.train_dataloader):
-
-            x_2, x_3 = x_23
-            self.dict_to_device(x_1)
-            self.dict_to_device(x_2)
+        for step, sub_ex in enumerate(self.train_dataloader):
 
             if max_steps is not None and step >= max_steps:
                 break
 
-            last_hidden_x_1 = self.encoder(**x_1)  # long sequence
-            last_hidden_x_2 = self.encoder(**x_2)  # subsequence
-            y_1 = self.pooling(last_hidden_x_1, attention_mask=x_1["attention_mask"])
-            y_2 = self.pooling(last_hidden_x_2, attention_mask=x_2["attention_mask"])
+            fragment = sub_ex.fragment
+            self.dict_to_device(fragment)
 
-            if x_3:
-                self.dict_to_device(x_3)
-                last_hidden_x_3 = self.encoder(**x_3)
-                y_3 = self.pooling(
-                    last_hidden_x_3, attention_mask=x_3["attention_mask"]
+            last_hidden_fragment = self.encoder(**fragment)  # long sequence
+            fragment_embedding = self.pooling(
+                last_hidden_fragment, attention_mask=fragment["attention_mask"]
+            )
+
+            if sub_ex.read_regularization:
+                read1, read2 = sub_ex.read
+                self.dict_to_device(read1)
+                self.dict_to_device(read2)
+                last_hidden_read2 = self.encoder(**read2)  # subsequence
+                read2_embedding = self.pooling(
+                    last_hidden_read2, attention_mask=read2["attention_mask"]
                 )
 
-            # Calculate similarity
-            # y_1 # names: [batch, embedding]
-            # y_2 # names: [batch, embedding]
+            else:
+                read1 = sub_ex.read
+                self.dict_to_device(read1)
+
+            last_hidden_read1 = self.encoder(**read1)  # subsequence
+            read1_embedding = self.pooling(
+                last_hidden_read1, attention_mask=read1["attention_mask"]
+            )
 
             # batch x 1 x embedding y1 , 1 x batch x embedding y2 - > batch x batch
-            sim = self.similarity(y_1.unsqueeze(1), y_2.unsqueeze(0))  # outer-product
+            sim_fragment_read = self.similarity(
+                fragment_embedding.unsqueeze(1), read1_embedding.unsqueeze(0)
+            )  # outer-product
 
-            labels = torch.arange(sim.size(0)).long().to(self.device)
+            labels = torch.arange(sim_fragment_read.size(0)).long().to(self.device)
 
-            loss = self.loss(sim, labels)
+            loss = self.loss(sim_fragment_read, labels)
 
             # Compute similarity score between y2 and y3 and add to loss
-            if x_3:
-                sim_23 = self.similarity(y_2.unsqueeze(1), y_3.unsqueeze(0))
+            if sub_ex.read_regularization:
+                sim_read_read = self.similarity(
+                    read1_embedding.unsqueeze(1), read2_embedding.unsqueeze(0)
+                )
                 # Take the diagonal of the similarity matrix and sum the terms to add to the loss
-                sim_23 = torch.diag(sim_23)
-                sim_23 = torch.sum(sim_23) / sim_23.size(0)
+                diag_sim_read_read = torch.diag(sim_read_read)
+                normalized_read_read = torch.sum(
+                    diag_sim_read_read
+                ) / diag_sim_read_read.size(0)
                 max_sim = 0.8  # Hyperparameter that determines the maximum similarity score between the two reads
-                loss += (max_sim - sim_23) * self.regularizer if sim_23 < max_sim else 0
+                loss += torch.abs(max_sim - normalized_read_read) * self.regularizer
 
             loss = loss / self.training_config.accumulation_steps
             loss.backward()
@@ -143,12 +155,27 @@ class ContrastiveTrainer:
             if step % 1000 == 0:
                 torch.cuda.empty_cache()
             # delete the tensors: https://discuss.pytorch.org/t/gpu-memory-consumption-increases-while-training/2770/3?u=nagabhushansn95
-            del y_1, y_2, sim, labels, loss
-            for k, v in x_1.items():
+            del fragment_embedding, read1_embedding, sim_fragment_read, labels, loss
+
+            if sub_ex.read_regularization:
+                del (
+                    read2_embedding,
+                    sim_read_read,
+                    diag_sim_read_read,
+                    normalized_read_read,
+                    last_hidden_read2,
+                )
+                for k, v in read2.items():
+                    del v
+
+                del read2
+
+            for k, v in fragment.items():
                 del v
-            for k, v in x_2.items():
+            for k, v in read1.items():
                 del v
-            del last_hidden_x_1, last_hidden_x_2, x_1, x_2
+
+            del last_hidden_fragment, last_hidden_read1, read1, fragment
 
     def save_to_disk(self, path: Optional[str] = None):
         if path is None:
