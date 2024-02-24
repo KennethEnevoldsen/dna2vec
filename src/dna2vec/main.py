@@ -18,7 +18,7 @@ from dna2vec.trainer import ContrastiveTrainer
 from dna2vec.utils import cfg_to_wandb_dict, get_config_from_path
 
 
-def main(config: ConfigSchema, wandb_mode: str = "online", watch_watch: bool = False):
+def main(config: ConfigSchema, wandb_mode: str = "online", wandb_watch: bool = False):
     """
     Args:
         config: The configuration object
@@ -68,11 +68,11 @@ def main(config: ConfigSchema, wandb_mode: str = "online", watch_watch: bool = F
     # log config to wandb
     wandb.init(
         project="dna2vec",
-        name="sample_model",
+        name=training_cfg.run_name,
         config=cfg_to_wandb_dict(config),
         mode=wandb_mode,
     )
-    if watch_watch:
+    if wandb_watch:
         wandb.watch(model, log="all", log_freq=1, log_graph=True)  # just for debugging
 
     # TRAINING: Training loop
