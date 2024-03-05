@@ -68,7 +68,10 @@ def main(config: ConfigSchema, wandb_mode: str = "online", wandb_watch: bool = F
     # log config to wandb
     wandb.init(
         project="dna2vec",
-        name=training_cfg.run_name,
+        name="regularization_"
+        + str(training_cfg.regularizer)
+        + "_pool_"
+        + training_cfg.pool_type,
         config=cfg_to_wandb_dict(config),
         mode=wandb_mode,
     )

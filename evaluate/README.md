@@ -42,6 +42,9 @@ python upsert.py --recipes "ch2;ch3;ch2,ch3" --checkpoints "trained-ch2-1000"
 ```
 Note for error `pinecone.core.exceptions.PineconeException: UNKNOWN:Error received from peer`: Due to the wait time of creating the pod on Pinecone, you may have to run this command more than once to start the upstream.
 
+NOTE : For error ```AttributeError: init is no longer a top-level attribute of the pinecone package.```
+please install the specific version of pinecone client - ```pinecone-client==2.2.4```
+
 ### Step 3a. Naïve Permutation and Accuracy Evaluation
 
 Ensure that Pinecone instances are running and the data is populated. Else go back to Step 2. To run permutation accuracy computations at scale, run `test_cache_permute.py`. Arguments:
