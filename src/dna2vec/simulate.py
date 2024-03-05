@@ -59,7 +59,7 @@ def simulate_reads_to_disk(
     reference_genome: Union[Path, None] = None,
     insertion_rate: float = 0.00009,
     deletion_rate: float = 0.00011,
-    quality: Tuple[int, int] = (60,93),
+    quality: Tuple[int, int] = (60, 93),
     sequencing_system: SEQUENCE_SYSTEMS = "HS20",
 ) -> Path:
     """
@@ -99,7 +99,7 @@ def simulate_reads_to_disk(
         "--minQ",
         str(quality[0]),
         "--maxQ",
-        str(quality[1])
+        str(quality[1]),
     ]
     logging.info(f"Running ART with the following command: {' '.join(cmd)}")
 
@@ -121,6 +121,7 @@ def load_simulated_reads_from_disk(
         List of aligned segments.
     """
     logging.info(f"Reading simulated reads from {simulated_path}")
+    print(simulated_path)
 
     sam = simulated_path.with_suffix(".sam")
 
@@ -137,7 +138,7 @@ def map_reads_to_reference(
     Map a read to a reference genome.
     """
     reference = load_human_reference_genome(reference)
-    
+
     id2read = defaultdict(list)
     unmapped_reads = []
     for read in reads:
@@ -164,23 +165,26 @@ def map_reads_to_reference(
 
 
 def _create_cache_path(
-        n_reads_pr_amplicon: int,
-        read_length: int,
-        insertion_rate: float,
-        deletion_rate: float,
-        quality: Tuple[int, int],
-        sequencing_system: SEQUENCE_SYSTEMS,
+    n_reads_pr_amplicon: int,
+    read_length: int,
+    insertion_rate: float,
+    deletion_rate: float,
+    quality: Tuple[int, int],
+    sequencing_system: SEQUENCE_SYSTEMS,
 ) -> Path:
-    file_name_stubs = ["reads",
-                 f"{n_reads_pr_amplicon}",
-                 f"{read_length}",
-                f"IR{str(insertion_rate).replace('.', '-dot-')}",
-                f"DR{str(deletion_rate).replace('.', '-dot-')}",
-                f"Q{str(quality[0])}-{str(quality[1])}",
-                f"{sequencing_system}"]
-    
+    file_name_stubs = [
+        "reads",
+        f"{n_reads_pr_amplicon}",
+        f"{read_length}",
+        f"IR{str(insertion_rate).replace('.', '-dot-')}",
+        f"DR{str(deletion_rate).replace('.', '-dot-')}",
+        f"Q{str(quality[0])}-{str(quality[1])}",
+        f"{sequencing_system}",
+    ]
+
     file_name = "_".join(file_name_stubs)
     return get_cache_dir() / "simulated_reads" / file_name
+
 
 def simulate_mapped_reads(
     n_reads_pr_amplicon: int,
@@ -189,12 +193,11 @@ def simulate_mapped_reads(
     deletion_rate: float = 0.00011,
     sequencing_system: SEQUENCE_SYSTEMS = "HS20",
     reference_genome: Union[Path, None] = None,
-    quality: Tuple[int, int] = (60,93)
+    quality: Tuple[int, int] = (60, 93),
 ):
     """
     Simulates reads and maps them to the reference genome.
     """
-
 
     output_path = _create_cache_path(
         n_reads_pr_amplicon=n_reads_pr_amplicon,
@@ -202,12 +205,12 @@ def simulate_mapped_reads(
         insertion_rate=insertion_rate,
         deletion_rate=deletion_rate,
         sequencing_system=sequencing_system,
-        quality=quality
+        quality=quality,
     )
-    
+
     output_path.mkdir(parents=True, exist_ok=True)
 
-    #if not output_path.with_suffix(".sam").exists():
+    # if not output_path.with_suffix(".sam").exists():
     simulated_reads = simulate_reads_to_disk(
         n_reads_pr_amplicon=n_reads_pr_amplicon,
         read_length=read_length,
@@ -216,7 +219,7 @@ def simulate_mapped_reads(
         insertion_rate=insertion_rate,
         deletion_rate=deletion_rate,
         sequencing_system=sequencing_system,
-        quality=quality
+        quality=quality,
     )
     # else:
     #     logging.info(
@@ -224,10 +227,9 @@ def simulate_mapped_reads(
     #     )
     #     simulated_reads = output_path
 
-
     mapped_reads = map_reads_to_reference(
         reads=load_simulated_reads_from_disk(simulated_reads),
-        reference=reference_genome
+        reference=reference_genome,
     )
 
     return mapped_reads

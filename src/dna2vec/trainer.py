@@ -88,27 +88,51 @@ class ContrastiveTrainer:
             self.dict_to_device(fragment)
 
             last_hidden_fragment = self.encoder(**fragment)  # long sequence
-            fragment_embedding = self.pooling(
-                last_hidden_fragment, attention_mask=fragment["attention_mask"]
-            )
+
+            # THE cls token is the first token
+
+            if self.training_config.pool_type == "cls":
+                fragment_embedding = last_hidden_fragment[:, 0, :]
+
+            elif self.training_config.pool_type == "mean":
+                fragment_embedding = self.pooling(
+                    last_hidden_fragment, attention_mask=fragment["attention_mask"]
+                )
+
+            else:
+                raise ValueError(
+                    f"Pooling type {self.training_config.pool_type} not implemented"
+                )
 
             if sub_ex.read_regularization:
                 read1, read2 = sub_ex.read
                 self.dict_to_device(read1)
                 self.dict_to_device(read2)
                 last_hidden_read2 = self.encoder(**read2)  # subsequence
-                read2_embedding = self.pooling(
-                    last_hidden_read2, attention_mask=read2["attention_mask"]
-                )
+                # read2_embedding_cls = last_hidden_read2[:, 0, :]
+
+                if self.training_config.pool_type == "cls":
+                    read2_embedding = last_hidden_read2[:, 0, :]
+                elif self.training_config.pool_type == "mean":
+                    read2_embedding = self.pooling(
+                        last_hidden_read2, attention_mask=read2["attention_mask"]
+                    )
 
             else:
                 read1 = sub_ex.read
                 self.dict_to_device(read1)
 
             last_hidden_read1 = self.encoder(**read1)  # subsequence
-            read1_embedding = self.pooling(
-                last_hidden_read1, attention_mask=read1["attention_mask"]
-            )
+
+            if self.training_config.pool_type == "cls":
+
+                read1_embedding = last_hidden_read1[:, 0, :]
+
+            elif self.training_config.pool_type == "mean":
+
+                read1_embedding = self.pooling(
+                    last_hidden_read1, attention_mask=read1["attention_mask"]
+                )
 
             # batch x 1 x embedding y1 , 1 x batch x embedding y2 - > batch x batch
             sim_fragment_read = self.similarity(
@@ -118,6 +142,7 @@ class ContrastiveTrainer:
             labels = torch.arange(sim_fragment_read.size(0)).long().to(self.device)
 
             loss = self.loss(sim_fragment_read, labels)
+            cont_loss = loss
 
             # Compute similarity score between y2 and y3 and add to loss
             if sub_ex.read_regularization:
@@ -130,7 +155,8 @@ class ContrastiveTrainer:
                     diag_sim_read_read
                 ) / diag_sim_read_read.size(0)
                 max_sim = 0.8  # Hyperparameter that determines the maximum similarity score between the two reads
-                loss += torch.abs(max_sim - normalized_read_read) * self.regularizer
+                reg_loss = torch.abs(max_sim - normalized_read_read)
+                loss += reg_loss * self.regularizer
 
             loss = loss / self.training_config.accumulation_steps
             loss.backward()
@@ -144,7 +170,15 @@ class ContrastiveTrainer:
 
             if step % log_interval == 0:
                 current_lr = self.optimizer.param_groups[0]["lr"]
-                wandb.log({"loss": loss, "step": step, "lr": current_lr})
+                wandb.log(
+                    {
+                        "total_loss": loss,
+                        "step": step,
+                        "lr": current_lr,
+                        "cont_loss": cont_loss,
+                        "reg_loss": reg_loss,
+                    }
+                )
 
             # save the model
             if loss < self.best_loss:
@@ -155,7 +189,15 @@ class ContrastiveTrainer:
             if step % 1000 == 0:
                 torch.cuda.empty_cache()
             # delete the tensors: https://discuss.pytorch.org/t/gpu-memory-consumption-increases-while-training/2770/3?u=nagabhushansn95
-            del fragment_embedding, read1_embedding, sim_fragment_read, labels, loss
+            del (
+                fragment_embedding,
+                read1_embedding,
+                sim_fragment_read,
+                labels,
+                loss,
+                cont_loss,
+                reg_loss,
+            )
 
             if sub_ex.read_regularization:
                 del (
@@ -194,7 +236,17 @@ class ContrastiveTrainer:
             "config": self.config,
         }
 
-        torch.save(save_dict, save_path / "checkpoint.pt")
+        torch.save(
+            save_dict,
+            save_path
+            / (
+                "regularization_"
+                + str(self.training_config.regularizer)
+                + "_pool_"
+                + self.training_config.pool_type
+                + "_checkpoint.pt"
+            ),
+        )
 
     @staticmethod
     def load_from_disk(path: str) -> "ContrastiveTrainer":

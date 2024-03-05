@@ -72,7 +72,7 @@ class TrainingConfigSchema(BaseModel):
     scheduler_config: SchedulerConfigSchema = SchedulerConfigSchema()
     save_path: Path = project_path / "models"
     regularizer: float = 0.0
-    run_name: str = "dna2vec"
+    pool_type: Literal["cls", "mean"] = "mean"
 
     max_steps: int = 1000
     log_interval: int = 100

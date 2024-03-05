@@ -11,7 +11,7 @@ from dna2vec.config_schema import (
 from dna2vec.dataset import FastaUniformSampler
 from dna2vec.main import main
 
-device = torch.device("cuda:0")
+device = torch.device("cuda:3")
 CONFIG = ConfigSchema(
     training_config=TrainingConfigSchema(
         max_steps=100_000,
@@ -22,8 +22,8 @@ CONFIG = ConfigSchema(
         scheduler_config=SchedulerConfigSchema(
             max_lr=1e-4,
         ),
-        regularizer=0.3,
-        run_name="read_read_regularization",
+        regularizer=0,
+        pool_type="cls",
     ),
     dataset_config=DatasetConfigSchemaUniformSampling(
         fasta_file=[Path("/mnt/SSD1/shreyas/dna2vec/data/chm13v2.0.fa")],
