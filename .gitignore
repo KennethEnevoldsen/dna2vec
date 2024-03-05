@@ -38,3 +38,7 @@ playground.ipynb
 *.conda
 
 playground.ipynb
+
+Logs/
+Results/
+simulated_reads/
