@@ -161,7 +161,6 @@ def bwamem_align_parallel(
     try:
         smallest_key = min(refined_results.keys())
         print("SMALLEST KEY IS ", smallest_key)
-        exit
     except ValueError:
         return [], [], [], time.time() - total_time, None
 

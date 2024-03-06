@@ -1,7 +1,6 @@
 import os
 
 os.environ["DNA2VEC_CACHE_DIR"] = "/home/shreyas/NLP/dna2vec"
-os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
 
 from helpers import raw_fasta_files
 import numpy as np

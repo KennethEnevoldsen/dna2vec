@@ -11,7 +11,7 @@ trained-all-longer: "/mnt/SSD5/pholur/checkpoints/checkpoint_major-flower-62.pt"
 trained-all-shorter: "/mnt/SSD5/pholur/checkpoints/vocal-paper-2.pt"
 
 trained-all-reg-mean-pooling: "/home/shreyas/NLP/dna2vec/models/regularization_0.3_pool_mean_checkpoint.pt"
-trained-all-reg-cls: "/home/shreyas/NLP/dna2vec/models/regularization_0.3_pool_cls_checkpoint.pt"
+trained-all-reg-cls: "/home/shreyas/NLP/dna2vec/models/regularization_0.0_pool_cls_checkpoint.pt"
 
 dna2bert-mean: "Baseline"
 dna2bert-max: "Baseline"

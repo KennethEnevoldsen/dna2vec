@@ -125,24 +125,29 @@ class ContrastiveTrainer:
             last_hidden_read1 = self.encoder(**read1)  # subsequence
 
             if self.training_config.pool_type == "cls":
-
                 read1_embedding = last_hidden_read1[:, 0, :]
 
             elif self.training_config.pool_type == "mean":
-
                 read1_embedding = self.pooling(
                     last_hidden_read1, attention_mask=read1["attention_mask"]
                 )
 
             # batch x 1 x embedding y1 , 1 x batch x embedding y2 - > batch x batch
-            sim_fragment_read = self.similarity(
+            sim_fragment_read1 = self.similarity(
                 fragment_embedding.unsqueeze(1), read1_embedding.unsqueeze(0)
             )  # outer-product
 
-            labels = torch.arange(sim_fragment_read.size(0)).long().to(self.device)
+            sim_fragment_read2 = self.similarity(
+                fragment_embedding.unsqueeze(1), read2_embedding.unsqueeze(0)
+            )
 
-            loss = self.loss(sim_fragment_read, labels)
-            cont_loss = loss
+            labels1 = torch.arange(sim_fragment_read1.size(0)).long().to(self.device)
+            labels2 = torch.arange(sim_fragment_read2.size(0)).long().to(self.device)
+
+            loss_read1 = self.loss(sim_fragment_read1, labels1)
+            loss_read2 = self.loss(sim_fragment_read2, labels2)
+
+            loss = loss_read1 + loss_read2
 
             # Compute similarity score between y2 and y3 and add to loss
             if sub_ex.read_regularization:
@@ -175,8 +180,8 @@ class ContrastiveTrainer:
                         "total_loss": loss,
                         "step": step,
                         "lr": current_lr,
-                        "cont_loss": cont_loss,
-                        "reg_loss": reg_loss,
+                        "loss_read1": loss_read1,
+                        "loss_read2": loss_read2,
                     }
                 )
 
@@ -192,10 +197,13 @@ class ContrastiveTrainer:
             del (
                 fragment_embedding,
                 read1_embedding,
-                sim_fragment_read,
-                labels,
+                sim_fragment_read1,
+                sim_fragment_read2,
+                labels1,
+                labels2,
                 loss,
-                cont_loss,
+                loss_read2,
+                loss_read1,
                 reg_loss,
             )
 

@@ -23,7 +23,7 @@ CONFIG = ConfigSchema(
             max_lr=1e-4,
         ),
         regularizer=0,
-        pool_type="cls",
+        pool_type="mean",
     ),
     dataset_config=DatasetConfigSchemaUniformSampling(
         fasta_file=[Path("/mnt/SSD1/shreyas/dna2vec/data/chm13v2.0.fa")],
