@@ -13,7 +13,7 @@ from torch.optim.lr_scheduler import LRScheduler, OneCycleLR
 from torch.utils.data import Dataset
 
 from dna2vec.dataset import FastaSamplerDataset
-from dna2vec.model import AveragePooler, SinusoidalPositionalEncoding
+from dna2vec.model import AveragePooler, SinusoidalPositionalEncoding, MLP
 from dna2vec.similarity import SimilarityWithTemperature
 
 scheduler = partial(
@@ -37,6 +37,7 @@ class ModelConfigSchema(BaseModel):
     dropout: float = 0.1
     activation: Literal["relu", "gelu"] = "gelu"
     pos_embedding: Type[nn.Module] = SinusoidalPositionalEncoding
+    # pooling: nn.Module = MLP(input_dim=384, output_dim=384, hidden_dim=512)
     pooling: nn.Module = AveragePooler()
     max_position_embeddings: int = 1024
     tokenizer_path: Path = tokenizer_path

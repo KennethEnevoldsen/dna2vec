@@ -1,15 +1,17 @@
 """
 A implementation of the contrastive siamese architecture from sentence transformers to learn DNA embeddings.
 """
+
 import math
 from typing import Dict, Literal, Optional, Tuple, Type
 
 import torch
 import torch.nn as nn
 
-from dna2vec.tokenizer  import BPTokenizer
+from dna2vec.tokenizer import BPTokenizer
 
 import logging
+
 
 class SinusoidalPositionalEncoding(nn.Module):
     """
@@ -29,12 +31,12 @@ class SinusoidalPositionalEncoding(nn.Module):
         pe = torch.zeros(max_len, 1, d_model)
         pe[:, 0, 0::2] = torch.sin(position * div_term)
         pe[:, 0, 1::2] = torch.cos(position * div_term)
-        pe = pe.squeeze(1).unsqueeze(0) # (1, max_len, d_model)
+        pe = pe.squeeze(1).unsqueeze(0)  # (1, max_len, d_model)
         self.register_buffer("pe", pe)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x.names = ["batch", "sequence"]
-        return self.pe[:, :x.size(1), :]  # type: ignore # [batch, seq_len, d_model]
+        return self.pe[:, : x.size(1), :]  # type: ignore # [batch, seq_len, d_model]
 
 
 class LearnedPositionalEncoding(nn.Module):
@@ -113,7 +115,7 @@ class Encoder(nn.Module):
         )
 
     def forward(
-        self, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor]=None
+        self, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
         # input_ids.names = ["batch", "sequence"]
         # embedding does not support named tensors
@@ -144,9 +146,9 @@ class AveragePooler(nn.Module):
 
     def forward(self, last_hidden, attention_mask):
         # Old previous implementation
-        return (last_hidden * attention_mask.unsqueeze(-1)).sum(
-            1
-        ) / attention_mask.sum(-1).unsqueeze(-1)
+        return (last_hidden * attention_mask.unsqueeze(-1)).sum(1) / attention_mask.sum(
+            -1
+        ).unsqueeze(-1)
 
         # last_hidden.names = ["batch", "sequence", "embedding"]
         # attention_mask.names = ["batch", "sequence"]
@@ -159,6 +161,25 @@ class AveragePooler(nn.Module):
         #     "sequence"
         # )
         # return avg_emb
+
+
+class MLP(nn.Module):
+    """
+    MLP layer for CLS token
+
+    """
+
+    def __init__(self, input_dim: int, hidden_dim: int, output_dim: int):
+        super().__init__()
+        self.linear1 = nn.Linear(input_dim, hidden_dim)
+        self.activation = nn.ReLU()
+        self.linear2 = nn.Linear(hidden_dim, output_dim)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.linear1(x)
+        x = self.activation(x)
+        x = self.linear2(x)
+        return x
 
 
 def model_from_config(cfg) -> Tuple[Encoder, nn.Module, BPTokenizer]:
@@ -191,7 +212,9 @@ def model_from_config(cfg) -> Tuple[Encoder, nn.Module, BPTokenizer]:
 
     # check if model_path exists
     if not cfg.model_path.exists():
-        logging.warning(f"Model path {cfg.model_path} does not exist, creating new model")
+        logging.warning(
+            f"Model path {cfg.model_path} does not exist, creating new model"
+        )
         cfg.model_path = None
         return model_from_config(cfg)
 
@@ -200,7 +223,7 @@ def model_from_config(cfg) -> Tuple[Encoder, nn.Module, BPTokenizer]:
 
     info_dict = torch.load(cfg.model_path)
     model_kwargs = info_dict["model_kwargs"]
-    
+
     # load tokenizer
     tokenizer_path = model_kwargs.pop("tokenizer_path")
     # pooling
@@ -211,8 +234,6 @@ def model_from_config(cfg) -> Tuple[Encoder, nn.Module, BPTokenizer]:
     model.load_state_dict(info_dict["model_state_dict"])
 
     return model, pooler, tokenizer
-
-
 
 
 if __name__ == "__main__":
