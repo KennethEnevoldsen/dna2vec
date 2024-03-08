@@ -11,7 +11,7 @@ from dna2vec.config_schema import (
 from dna2vec.dataset import FastaUniformSampler
 from dna2vec.main import main
 
-device = torch.device("cuda:3")
+device = torch.device("cuda:2")
 CONFIG = ConfigSchema(
     training_config=TrainingConfigSchema(
         max_steps=100_000,

@@ -59,6 +59,17 @@ class ContrastiveTrainer:
             self.device = device
         self.encoder.to(self.device)
 
+    def pooling_to_device(self, device: Optional[torch.device] = None) -> None:
+        """
+        Move the pooling layer to the specified device
+
+        Args:
+            device: Device to move the pooling layer to
+        """
+        if device is not None:
+            self.device = device
+        self.pooling.to(self.device)
+
     def dict_to_device(self, d: dict):
         for k, v in d.items():
             if isinstance(v, torch.Tensor):
@@ -93,6 +104,8 @@ class ContrastiveTrainer:
 
             if self.training_config.pool_type == "cls":
                 fragment_embedding = last_hidden_fragment[:, 0, :]
+                self.pooling_to_device()
+                fragment_embedding = self.pooling(fragment_embedding)
 
             elif self.training_config.pool_type == "mean":
                 fragment_embedding = self.pooling(
@@ -113,7 +126,10 @@ class ContrastiveTrainer:
 
                 if self.training_config.pool_type == "cls":
                     read2_embedding = last_hidden_read2[:, 0, :]
+                    read2_embedding = self.pooling(read2_embedding)
+
                 elif self.training_config.pool_type == "mean":
+
                     read2_embedding = self.pooling(
                         last_hidden_read2, attention_mask=read2["attention_mask"]
                     )
@@ -126,6 +142,7 @@ class ContrastiveTrainer:
 
             if self.training_config.pool_type == "cls":
                 read1_embedding = last_hidden_read1[:, 0, :]
+                read1_embedding = self.pooling(read1_embedding)
 
             elif self.training_config.pool_type == "mean":
                 read1_embedding = self.pooling(
@@ -147,7 +164,9 @@ class ContrastiveTrainer:
             loss_read1 = self.loss(sim_fragment_read1, labels1)
             loss_read2 = self.loss(sim_fragment_read2, labels2)
 
-            loss = loss_read1 + loss_read2
+            alpha = 1
+            beta = 1 - alpha
+            loss = alpha * loss_read1 + beta * loss_read2
 
             # Compute similarity score between y2 and y3 and add to loss
             if sub_ex.read_regularization:
@@ -239,6 +258,7 @@ class ContrastiveTrainer:
 
         save_dict = {
             "model": self.encoder.state_dict(),
+            "pooling": self.pooling.state_dict(),
             "optimizer": self.optimizer.state_dict(),
             "scheduler": self.scheduler.state_dict(),
             "config": self.config,
