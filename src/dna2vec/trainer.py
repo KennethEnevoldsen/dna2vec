@@ -46,7 +46,7 @@ class ContrastiveTrainer:
         self.training_config = config.training_config
 
 
-    def model_to_device(self, device: Optional[torch.device] = None) -> None:
+    def model_to_device(self, device: Optional[torch.device] = None, is_parallel: Optional[bool] = False) -> None:
         """
         Move the model to the specified device
 
@@ -55,7 +55,11 @@ class ContrastiveTrainer:
         """
         if device is not None:
             self.device = device
+            
+        if is_parallel:
+            self.encoder = nn.DataParallel(self.encoder, device_ids = [3, 4])
         self.encoder.to(self.device)
+
 
     def dict_to_device(self, d: dict):
         for k, v in d.items():
@@ -76,7 +80,7 @@ class ContrastiveTrainer:
         """
 
 
-        self.model_to_device()
+        self.model_to_device(is_parallel=True)
         self.encoder.train()
         for step, (x_1, x_2) in enumerate(self.train_dataloader):
             self.dict_to_device(x_1)

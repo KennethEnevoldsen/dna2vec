@@ -2,6 +2,7 @@
 A implementation of the contrastive siamese architecture from sentence transformers to learn DNA embeddings.
 """
 import math
+import numpy as np
 from typing import Dict, Literal, Optional, Tuple, Type
 
 import torch
@@ -62,6 +63,246 @@ class LearnedPositionalEncoding(nn.Module):
         # emb.names = ["batch", "sequence", "embedding"]
         return x
 
+#New
+
+class DynamicAttention(nn.Module):
+    def __init__(self, d_model, num_heads, attn_dropout=0.05):
+        super(DynamicAttention, self).__init__()
+        self.num_heads = num_heads
+        self.d_model = d_model
+        self.d_k = d_model // num_heads  # Dimension per head
+        self.scaling_factor = nn.Parameter(torch.zeros(num_heads))
+        self.attention_dropout = nn.Dropout(attn_dropout)
+        self.norm = nn.LayerNorm(d_model)
+
+        # Separate linear transformations for queries, keys, and values
+        self.query_layers = nn.ModuleList([nn.Linear(d_model, self.d_k) for _ in range(num_heads)])
+        self.key_layers = nn.ModuleList([nn.Linear(d_model, self.d_k) for _ in range(num_heads)])
+        self.value_layers = nn.ModuleList([nn.Linear(d_model, self.d_k) for _ in range(num_heads)])
+
+        # Final output linear transformation
+        self.out = nn.Linear(d_model, d_model)
+        self._reset_parameters()
+        
+    def _reset_parameters(self):
+        # Initialize linear transformations query, key, value layers and output layer
+        for layer in self.query_layers:
+            nn.init.xavier_uniform_(layer.weight)
+            nn.init.constant_(layer.bias, 0)
+        for layer in self.key_layers:
+            nn.init.xavier_uniform_(layer.weight)
+            nn.init.constant_(layer.bias, 0)
+        for layer in self.value_layers:
+            nn.init.xavier_uniform_(layer.weight)
+            nn.init.constant_(layer.bias, 0)  
+        nn.init.xavier_uniform_(self.out.weight)
+        nn.init.constant_(self.out.bias, 0)
+        
+
+    def forward(self, query, key, value, mask=None):
+
+        # Applying separate linear transformations for each head
+        qs = torch.cat([layer(query).view(query.size(0), 1, query.size(1), self.d_k) for layer in self.query_layers], dim=1)
+        ks = torch.cat([layer(key).view(query.size(0), 1, query.size(1), self.d_k) for layer in self.key_layers], dim=1)
+        vs = torch.cat([layer(value).view(query.size(0), 1, query.size(1), self.d_k) for layer in self.value_layers], dim=1)
+
+        # Calculate scaled dot-product attention scores
+        
+        scores = torch.matmul(qs, ks.transpose(-2, -1)) / math.sqrt(self.d_k)
+        if mask is not None:
+            scores = scores.masked_fill(mask.unsqueeze(1).unsqueeze(2) == 0, -9e15)
+            
+        attn = nn.functional.softmax(scores, dim=-1)
+        attn = attn * self.scaling_factor.unsqueeze(0).unsqueeze(-1).unsqueeze(-1)
+        attn = self.attention_dropout(attn) # Derived from https://arxiv.org/abs/1907.11065
+
+        # Compute context vectors and reshape back to the original d_model dimensions
+        context = torch.matmul(attn, vs).transpose(1, 2).contiguous().view(query.size(0), query.size(1), self.d_model)
+
+        # Apply final linear transformation and dropout
+        output = self.out(context)
+        # Add and normalize
+        return output
+
+class FeedbackAttention(nn.Module):
+    def __init__(self, d_model, num_heads, iterations=3, attn_dropout=0.05, dropout=0.1):
+        super(FeedbackAttention, self).__init__()
+        self.num_heads = num_heads
+        self.iterations = iterations
+        self.d_model = d_model
+        self.d_k = d_model // num_heads
+        
+        # Initialize linear transformations for queries, keys, and values
+        self.query_layers = nn.ModuleList([nn.Linear(d_model, self.d_k) for _ in range(num_heads)])
+        self.key_layers = nn.ModuleList([nn.Linear(d_model, self.d_k) for _ in range(num_heads)])
+        self.value_layers = nn.ModuleList([nn.Linear(d_model, self.d_k) for _ in range(num_heads)])
+        
+        # Dropout layers for attention and output
+        self.dropout = nn.Dropout(dropout)
+        self.attention_dropout = nn.Dropout(attn_dropout)
+        
+        # Output linear layer and normalization layer
+        self.out = nn.Linear(d_model, d_model)
+        self.norm = nn.LayerNorm(d_model)
+        
+        self._reset_parameters()
+        
+    def _reset_parameters(self):
+        # Initialize linear transformations query, key, value layers and output layer
+        for layer in self.query_layers:
+            nn.init.xavier_uniform_(layer.weight)
+            nn.init.constant_(layer.bias, 0)
+        for layer in self.key_layers:
+            nn.init.xavier_uniform_(layer.weight)
+            nn.init.constant_(layer.bias, 0)
+        for layer in self.value_layers:
+            nn.init.xavier_uniform_(layer.weight)
+            nn.init.constant_(layer.bias, 0)  
+        nn.init.xavier_uniform_(self.out.weight)
+        nn.init.constant_(self.out.bias, 0)
+
+    def forward(self, x, mask=None):
+        output = x
+        for _ in range(self.iterations):
+            # Compute query, key, and value for all heads
+            qs = torch.stack([layer(output) for layer in self.query_layers], dim=1)
+            ks = torch.stack([layer(x) for layer in self.key_layers], dim=1)
+            vs = torch.stack([layer(x) for layer in self.value_layers], dim=1)
+            
+            # Calculate attention scores
+            scores = torch.matmul(qs, ks.transpose(-2, -1)) / math.sqrt(self.d_k)
+            
+            # Apply masking if provided
+            if mask is not None:
+                scores = scores.masked_fill(mask.unsqueeze(1).unsqueeze(2) == 0, -9e15)
+            
+            # Compute softmax over the last dimension to get attention probabilities
+            attn = torch.nn.functional.softmax(scores, dim=-1)
+            attn = self.attention_dropout(attn) # Derived from https://arxiv.org/abs/1907.11065
+            
+            # Compute weighted sum of values
+            context = torch.matmul(attn, vs)
+            context = context.transpose(1, 2).contiguous().view(output.size(0), -1, self.d_model)
+            
+            # Pass through the output layer and apply dropout and normalization
+            output = self.out(context)
+            output = self.dropout(output)
+            output = self.norm(output + x)
+        
+        return output
+
+
+class DynamicFeedbackAttention(nn.Module):
+    def __init__(self, d_model, num_heads, attn_dropout=0.05, iterations=3):
+        super(DynamicFeedbackAttention, self).__init__()
+        self.num_heads = num_heads
+        self.iterations = iterations
+        self.d_model = d_model
+        self.d_k = d_model // num_heads  # Dimension of each head
+        self.scaling_factor = nn.Parameter(torch.zeros(num_heads))
+        
+        # Separate linear transformations for queries, keys, and values for each head
+        self.query_layers = nn.ModuleList([nn.Linear(d_model, self.d_k) for _ in range(num_heads)])
+        self.key_layers = nn.ModuleList([nn.Linear(d_model, self.d_k) for _ in range(num_heads)])
+        self.value_layers = nn.ModuleList([nn.Linear(d_model, self.d_k) for _ in range(num_heads)])
+        
+        self.attention_dropout = nn.Dropout(attn_dropout)
+        self.out = nn.Linear(d_model, d_model)
+        self.norm = nn.LayerNorm(d_model)
+        
+        self._reset_parameters()
+        
+    def _reset_parameters(self):
+        # Initialize linear transformations query, key, value layers and output layer
+        for layer in self.query_layers:
+            nn.init.xavier_uniform_(layer.weight)
+            nn.init.constant_(layer.bias, 0)
+        for layer in self.key_layers:
+            nn.init.xavier_uniform_(layer.weight)
+            nn.init.constant_(layer.bias, 0)
+        for layer in self.value_layers:
+            nn.init.xavier_uniform_(layer.weight)
+            nn.init.constant_(layer.bias, 0)  
+        nn.init.xavier_uniform_(self.out.weight)
+        nn.init.constant_(self.out.bias, 0)
+
+    def forward(self, x, mask=None):
+        output = x
+        for _ in range(self.iterations):
+            # Applying separate transformations and stacking for multi-head attention
+            qs = torch.stack([layer(output) for layer in self.query_layers], dim=1)
+            ks = torch.stack([layer(x) for layer in self.key_layers], dim=1)
+            vs = torch.stack([layer(x) for layer in self.value_layers], dim=1)
+
+            # Calculate scaled dot-product attention scores
+
+            scores = torch.matmul(qs, ks.transpose(-2, -1)) / math.sqrt(self.d_k)
+            if mask is not None:
+                scores = scores.masked_fill(mask.unsqueeze(1).unsqueeze(2) == 0, -9e15)
+            
+            attn = nn.functional.softmax(scores, dim=-1)
+            attn = attn * self.scaling_factor.unsqueeze(0).unsqueeze(-1).unsqueeze(-1)
+            attn = self.attention_dropout(attn) # Derived from https://arxiv.org/abs/1907.11065
+            
+
+            # Compute context vectors and reshape back to the original d_model dimensions
+            context = torch.matmul(attn, vs).transpose(1, 2).contiguous().reshape(x.size(0), x.size(1), self.d_model)
+
+            # Pass through the output layer and apply dropout and normalization
+            output = self.out(context)
+
+        return output
+
+
+
+class CustomTransformerEncoderLayer(nn.Module):
+    def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1, activation="relu"):
+        super(CustomTransformerEncoderLayer, self).__init__()
+        self.self_attn = DynamicFeedbackAttention(d_model = d_model, num_heads = nhead)
+        self.linear1 = nn.Linear(d_model, dim_feedforward)
+        self.dropout = nn.Dropout(dropout)
+        self.linear2 = nn.Linear(dim_feedforward, d_model)
+
+        self.norm1 = nn.LayerNorm(d_model)
+        self.norm2 = nn.LayerNorm(d_model)
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout)
+        
+        self.activation = nn.functional.relu if activation == "relu" else nn.functional.gelu
+        
+        self._reset_parameters()
+    
+    def _reset_parameters(self):
+        nn.init.xavier_uniform_(self.linear1.weight)
+        nn.init.xavier_uniform_(self.linear2.weight)
+        nn.init.constant_(self.linear1.bias, 0)
+        nn.init.constant_(self.linear2.bias, 0)
+        
+    def forward(self, src, src_key_padding_mask=None):
+        src2 = self.norm1(src)
+        # src2 = self.self_attn(src2, src2, src2, src_key_padding_mask)
+        src2 = self.self_attn(src2, src_key_padding_mask) # for feedback attn
+        src = src + self.dropout1(src2)
+        src2 = self.norm2(src)
+        src2 = self.activation(self.linear1(src2))
+        src2 = self.dropout(src2)
+        src2 = self.linear2(src2)
+        src = src + self.dropout2(src2)
+        return src
+    
+class CustomTransformerEncoder(nn.Module):
+    def __init__(self, encoder_layer, num_layers, norm=None):
+        super(CustomTransformerEncoder, self).__init__()
+        self.layers = nn.ModuleList([encoder_layer for _ in range(num_layers)])
+        self.norm = norm
+
+    def forward(self, src, src_key_padding_mask=None):
+        output = src
+        for layer in self.layers:
+            output = layer(output, src_key_padding_mask=src_key_padding_mask)
+        if self.norm:
+            output = self.norm(output)
+        return output
 
 class Encoder(nn.Module):
     def __init__(
@@ -99,18 +340,27 @@ class Encoder(nn.Module):
         )
 
         # create encode layers
-        encoder_layer = nn.TransformerEncoderLayer(
+        # encoder_layer = nn.TransformerEncoderLayer(
+        #     d_model=embedding_dim,
+        #     nhead=num_heads,
+        #     dim_feedforward=dim_feedforward,
+        #     dropout=dropout,
+        #     activation=activation,
+        #     batch_first=True,
+        #     norm_first=True,  # following: https://arxiv.org/pdf/2002.04745.pdf
+        # )
+        # self.trf_encoder = nn.TransformerEncoder(
+        #     encoder_layer=encoder_layer, num_layers=num_layers
+        # )
+        
+        encoder_layer = CustomTransformerEncoderLayer(
             d_model=embedding_dim,
             nhead=num_heads,
             dim_feedforward=dim_feedforward,
             dropout=dropout,
             activation=activation,
-            batch_first=True,
-            norm_first=True,  # following: https://arxiv.org/pdf/2002.04745.pdf
         )
-        self.trf_encoder = nn.TransformerEncoder(
-            encoder_layer=encoder_layer, num_layers=num_layers
-        )
+        self.trf_encoder = CustomTransformerEncoder(encoder_layer, num_layers)
 
     def forward(
         self, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor]=None
