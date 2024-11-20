@@ -1,7 +1,9 @@
 from pathlib import Path
 from typing import Dict, List, Literal, Tuple, Union, Optional
 from dataclasses import dataclass
+import random
 
+import numpy as np
 import torch
 from torch.utils.data import IterableDataset
 
@@ -217,14 +219,16 @@ class FastaUniformSampler(IterableDataset):
                 read_1, read_2 = subsequence_example.read
 
                 yield SubsequenceExample(
-                    fragment, (read_1.upper(), read_2.upper()), self.read_regularizer
+                    fragment.upper(),
+                    (read_1.upper(), read_2.upper()),
+                    self.read_regularizer,
                 )
 
             else:
                 read_1 = subsequence_example.read
 
                 yield SubsequenceExample(
-                    fragment, (read_1.upper()), self.read_regularizer
+                    fragment.upper(), (read_1.upper()), self.read_regularizer
                 )
 
     def __iter__(self):
@@ -255,6 +259,8 @@ def collate_fn(
 
     reads = [subsequence_ex.read for subsequence_ex in subsequence_batch]
 
+    art_reads = add_noise(reads)
+
     # Check if the regularizer is enabled across the entire batch
     read_regularization = all(
         [subsequence_ex.read_regularization for subsequence_ex in subsequence_batch]
@@ -263,7 +269,7 @@ def collate_fn(
     fragment_tokenized = tokenizer.tokenize(fragment)
 
     if read_regularization:
-        read_1, read_2 = list(zip(*reads))
+        read_1, read_2 = list(zip(*art_reads))
         read_1_tokenized = tokenizer.tokenize(read_1)
         read_2_tokenized = tokenizer.tokenize(read_2)
 
@@ -282,3 +288,64 @@ def collate_fn(
             read=(read_1_tokenized.to_torch()),
             read_regularization=False,
         )
+
+
+def add_noise(
+    batch: List[str],
+    frac_of_edits: float = 0.4,
+    edit_range: List[int] = [1, 5],
+    distribution_mode: str = "uniform",
+) -> List[str]:
+    """
+    Adds noise to a batch of DNA reads by editing a fraction of them. Each edit consists of
+    flipping base pairs at random positions.
+
+
+    :param batch: List of DNA reads represented as strings.
+    :param frac_of_edits: Fraction of reads that will be edited.
+    :param edit_range: Range (percentage) of bases in each read to be edited.
+    :param distribution_mode: Determines how the number of edits is distributed across the reads.
+    :return: The batch with noise added to some reads.
+    """
+
+    edited_batch = []
+
+    for read1, read2 in batch:
+
+        if random.random() < frac_of_edits:  # Decide if the read is to be edited
+
+            num_bases = min(len(read1), len(read2))  # total bases
+
+            if distribution_mode == "uniform":
+                percent_edit = random.sample(range(edit_range[0], edit_range[1]), 1)[0]
+
+            percent_edit = min(
+                max(percent_edit, edit_range[0]), edit_range[1]
+            )  # Clamp within edit range
+            num_edits = int(
+                percent_edit * 0.01 * num_bases
+            )  # Convert percentage to actual number of edits
+
+            edit_indices = random.sample(
+                range(num_bases), num_edits
+            )  # Get random indices for edits
+            new_read_1 = list(read1)  # Convert string to list for editing
+            new_read_2 = list(read2)
+            for idx in edit_indices:
+                current_base_1 = read1[idx]
+                current_base_2 = read2[idx]
+                new_base_1 = random.choice(
+                    list({"A", "T", "G", "C"} - {current_base_1})
+                )  # Pick a different base
+                new_base_2 = random.choice(
+                    list({"A", "T", "G", "C"} - {current_base_2})
+                )
+                new_read_1[idx] = new_base_1
+                new_read_2[idx] = new_base_2
+            edited_batch.append(
+                ("".join(new_read_1), "".join(new_read_2))
+            )  # Convert back to string and add to batch
+        else:
+            edited_batch.append((read1, read2))  # No edits, add original read to batch
+
+    return edited_batch

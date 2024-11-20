@@ -29,7 +29,7 @@ tokenizer_path = (
 
 
 class ModelConfigSchema(BaseModel):
-    embedding_dim: int = 384
+    embedding_dim: int = 1020
     dim_feedforward: int = 1536
     vocab_size: Optional[int] = None  # derived from tokenizer
     num_heads: int = 12
@@ -41,21 +41,21 @@ class ModelConfigSchema(BaseModel):
     pooling: nn.Module = AveragePooler()
     max_position_embeddings: int = 1024
     tokenizer_path: Path = tokenizer_path
-    model_path: Optional[Path] = None  # where to load the model from
+    modelpath: Optional[Path] = None  # where to load the model from
 
     class Config:
         arbitrary_types_allowed = True
 
 
 class OptimizerConfigSchema(BaseModel):
-    lr: float = 0.0001
+    lr: float = 0.00005
     betas: tuple[float, float] = (0.9, 0.999)
     weight_decay: float = 0.01
-    eps = 1e-8
+    eps: float = 1e-8
 
 
 class SchedulerConfigSchema(BaseModel):
-    max_lr: float = 1e-4
+    max_lr: float = 5e-5
     anneal_strategy: Literal["cos", "linear", "polynomial", "constant"] = "cos"
     total_steps: Optional[int] = None  # derived from training config
 
@@ -90,10 +90,10 @@ class BaseDatasetConfigSchema(BaseModel):
 
 class DatasetConfigSchemaUniformSampling(BaseDatasetConfigSchema):
     fasta_file: list
-    range_min = 1000
-    range_max = 2000
-    subsequence_range_min = 100
-    subsequence_range_max = 500
+    range_min: int = 1000
+    range_max: int = 2000
+    subsequence_range_min: int = 100
+    subsequence_range_max: int = 500
     sampling_strategy: str = "random_subsequence"
     read_regularizer: bool = False
 

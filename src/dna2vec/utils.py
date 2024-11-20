@@ -19,7 +19,8 @@ CACHE_DIR = Path.home() / ".cache" / "dna2vec"
 
 def download_human_reference_genome(
     reference: Literal["GRCh38", "CHM13"] = "CHM13",
-    force: bool = False, use_uncertified_ssl: bool = False
+    force: bool = False,
+    use_uncertified_ssl: bool = False,
 ) -> Path:
     """
     Download the human reference genome to the cache directory. If the file already
@@ -35,10 +36,8 @@ def download_human_reference_genome(
     cache_dir.mkdir(exist_ok=True, parents=True)
 
     urls = {
-        "GRCh38":
-        "https://ftp.ncbi.nlm.nih.gov/refseq/H_sapiens/annotation/GRCh38_latest/refseq_identifiers/GRCh38_latest_genomic.fna.gz",
-        "CHM13":
-        "https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/CHM13/assemblies/analysis_set/chm13v2.0.fa.gz"
+        "GRCh38": "https://ftp.ncbi.nlm.nih.gov/refseq/H_sapiens/annotation/GRCh38_latest/refseq_identifiers/GRCh38_latest_genomic.fna.gz",
+        "CHM13": "https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/CHM13/assemblies/analysis_set/chm13v2.0.fa.gz",
     }
     url = urls[reference]
     output = cache_dir / "GRCh38_latest_genomic.fna.gz"

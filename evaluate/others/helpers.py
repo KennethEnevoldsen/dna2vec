@@ -1,60 +1,95 @@
-# Standard library imports
-import random
-import time
-from collections import defaultdict
 from typing import List, Tuple
-
-# Third-party imports
-import jsonlines
+import random
+import yaml
 import numpy as np
+
+from pinecone_store import PineconeStore
+from aligners.smith_waterman import bwamem_align, bwamem_align_parallel
 import torch
 import torch.nn.functional as F
-import yaml
-from Levenshtein import distance as levenshtein_distance
-from tqdm import tqdm
-import scipy.stats as stats
 
-# Local imports
+
 from alignment_metrics import calculate_smith_waterman_distance
-from aligners.smith_waterman import bwamem_align, bwamem_align_parallel
+from collections import defaultdict
+
+# import sys
+# sys.path.append("../src/")
 from dna2vec.model import model_from_config
 from inference_models import EvalModel, Baseline
-from pinecone_store import PineconeStore
+
+from collections import defaultdict
+import time
+import jsonlines
 
 
-# Define the configuration files
-config_files = {
-    "data_recipes": "/home/shreyas/NLP/dna2vec/evaluate/configs/data_recipes.yaml",
-    "checkpoints": "/home/shreyas/NLP/dna2vec/evaluate/configs/model_checkpoints.yaml",
-    "raw_fasta_files": "/home/shreyas/NLP/dna2vec/evaluate/configs/raw.yaml"
-}
+with open("configs/data_recipes.yaml", "r") as stream:
+    data_recipes = yaml.safe_load(stream)
 
-def load_yaml_config(file_path):
-    """
-    Load a YAML configuration file.
-    """
-    with open(file_path, "r") as stream:
-        return yaml.safe_load(stream)
+with open("configs/model_checkpoints.yaml", "r") as stream:
+    checkpoints = yaml.safe_load(stream)
 
-# Load all configurations
-configs = {key: load_yaml_config(path) for key, path in config_files.items()}
+with open("configs/raw.yaml", "r") as stream:
+    raw_fasta_files = yaml.safe_load(stream)
 
-# Now you can access the configurations like this:
-# data_recipes = configs["data_recipes"]
-# checkpoints = configs["checkpoints"]
-# raw_fasta_files = configs["raw_fasta_files"]
+from tqdm import tqdm
+
+
+import scipy.stats as stats
 
 
 def clopper_pearson_interval(successes, trials, confidence_level=0.95):
-    """
-    Compute Error bounds using Clopper-Pearson method.
-    """
     alpha = 1 - confidence_level
 
     lower_bound = stats.beta.ppf(alpha / 2, successes, trials - successes + 1)
     upper_bound = stats.beta.ppf(1 - alpha / 2, successes + 1, trials - successes)
 
     return lower_bound, upper_bound
+
+
+import time
+
+# def main_align(store,
+#                 queries,
+#                 indices,
+#                 top_k,
+#                 exactness=0,
+#                 distance_bound=0,
+#                 flex=False,
+#                 batch_size=64):
+
+
+#     finer_flag = np.zeros((len(queries), 1))
+#     returned = store.query_batch(queries, indices, top_k=top_k)
+
+#     for i,returned_unit in enumerate(returned): # can potentially be shuffled but that's okay
+#         returned_unit_matched = returned_unit["matches"]
+#         trained_positions = [sample["metadata"]["position"] for sample in returned_unit_matched]
+#         metadata_set = [sample["metadata"]["metadata"] for sample in returned_unit_matched]
+
+#         all_candidate_strings = [sample["metadata"]["text"] for sample in returned_unit_matched]
+
+#         identified_sub_indices, identified_indices, _, timer, smallest_distance = bwamem_align_parallel(
+#                                                                                             all_candidate_strings,
+#                                                                                             trained_positions,
+#                                                                                             metadata_set,
+#                                                                                             returned_unit["query"])
+
+#         series = [int(tup[0]) + int(tup[1]) for tup in zip(identified_sub_indices, identified_indices)]
+
+#         if flex:
+#             if is_within_range_of_any_element(returned_unit["index"], series, exactness) or \
+#                     abs(smallest_distance + 2*len(returned_unit["query"])) < distance_bound + 1: # the 1 here helps with instabilities
+#                 finer_flag[i,0] = 1
+#             else:
+#                 finer_flag[i,0] = 0
+#         else:
+#             if (returned_unit["index"] in series) or abs(smallest_distance + 2*len(returned_unit["query"])) < 1: # exact SW match
+#                 finer_flag[i,0] = 1
+#             else:
+#                 finer_flag[i,0] = 0
+
+#     return finer_flag
+
 
 def get_embedding(
     model: EvalModel, sequences: List[str], batch_size=64
@@ -83,7 +118,7 @@ def get_embedding(
 
 
 def get_closest_subsequence(
-    subsequences: List[str], read: str, model: EvalModel, top_k: int = 1
+    subsequences: List[str], read: str, model: EvalModel
 ) -> float:
     """
 
@@ -92,8 +127,6 @@ def get_closest_subsequence(
     Inputs:
         subsequence_embedding: torch.Tensor, embedding of the subsequence
         read_embedding: torch.Tensor, embedding of the read
-        model: EvalModel, model to encode the subsequences
-        top_k: int, number of top-k candidates to consider
     Output:
         cosine_similarity: float, cosine similarity between the subsequence and the read
     """
@@ -108,24 +141,12 @@ def get_closest_subsequence(
         read_embedding.unsqueeze(0), subsequence_encodings
     )
 
-    # Find the indices of the top k similarities
-    top_k_similarities, top_k_indices = torch.topk(similarities, top_k)
+    # Find the index of the maximum similarity
+    max_similarity_index = torch.argmax(similarities).item()
+    max_similarity = similarities[max_similarity_index].item()
 
-    # Get the corresponding subsequences
-    top_k_subsequences = [subsequences[i] for i in top_k_indices.tolist()]
-
-    # Compute edit distances for top k subsequences
-    edit_distances = [
-        levenshtein_distance(read, subseq) for subseq in top_k_subsequences
-    ]
-
-    # Find the subsequence with the minimum edit distance
-    min_edit_distance_index = np.argmin(edit_distances)
-    best_subsequence = top_k_subsequences[min_edit_distance_index]
-    best_similarity = top_k_similarities[min_edit_distance_index].item()
-    best_edit_distance = edit_distances[min_edit_distance_index]
-
-    return best_subsequence, best_similarity, best_edit_distance
+    # Return the subsequence with maximum similarity and its similarity score
+    return subsequences[max_similarity_index], max_similarity
 
 
 def generate_subsequences(fragment: str, read_length: int) -> List[str]:
@@ -149,6 +170,7 @@ def generate_subsequences(fragment: str, read_length: int) -> List[str]:
 
     return subsequences, count
 
+
 def get_sw_less_matching(
     all_candidate_strings: List[str], read: str, model: EvalModel
 ) -> Tuple[str, str, float]:
@@ -166,19 +188,17 @@ def get_sw_less_matching(
         candidate_subsequence: string, subsequence of candidate with the highest cosine similarity
         candidate_score: float, cosine similarity between the read and the candidate with the highest cosine similarity
     """
-    topk_subsequences = (
-        []
-    )  # Store all subsequences of the candidates returned by the vector store
+    topk_subsequences = []
 
     for candidate in all_candidate_strings:
         subsequences, _ = generate_subsequences(candidate, len(read))
         topk_subsequences.extend(subsequences)
 
-    candidate_fragment, candidate_score, candidate_edit_distance = (
-        get_closest_subsequence(topk_subsequences, read, model, 5)
+    candidate_fragment, candidate_score = get_closest_subsequence(
+        topk_subsequences, read, model
     )
 
-    return candidate_fragment, candidate_score, candidate_edit_distance
+    return candidate_fragment, candidate_score
 
 
 def align_real_reads(
@@ -190,9 +210,6 @@ def align_real_reads(
     dictionary_of_values=None,
     meta=[],
 ):
-    """
-    Align real reads using the vector store.
-    """
 
     num_queries = len(queries)
     finer_flag = np.zeros((num_queries, 1))
@@ -233,26 +250,32 @@ def align_real_reads(
                 None,
             )
 
+            # series = [
+            #     int(tup[0]) + int(tup[1])
+            #     for tup in zip(identified_sub_indices, identified_indices)
+            # ]
+
             if len(fragment_distances) != 0:
 
-                is_within_score = is_within_score_bound(
+                is_within_distance = is_within_distance_bound(
+                    len(returned_unit["query"]),
                     fragment_distances,
                     distance_bound,
                     sw_original,
                 )
 
-                smallest_score = min(fragment_distances)
+                smallest_distance = min(fragment_distances)
                 if sw_original != -500:
                     print(
                         "Original SW distance is {} and min distance is {}".format(
-                            sw_original, smallest_score
+                            sw_original, smallest_distance
                         )
                     )
 
             else:
-                is_within_score = 0
+                is_within_distance = 0
 
-            if is_within_score:
+            if is_within_distance:
                 finer_flag[batch_start + i, 0] = 1
                 # write into jsonlines file
                 with jsonlines.open(
@@ -260,7 +283,7 @@ def align_real_reads(
                 ) as writer:
                     writer.write(
                         {
-                            "smallest_SW_distance": smallest_score,
+                            "smallest_SW_distance": smallest_distance,
                             "topk": top_k,
                             "read": str(returned_unit["query"]),
                         }
@@ -287,19 +310,10 @@ def main_align(
     namespaces=None,
     namespace_dict=None,
     dictionary_of_values=None,
-    compare_type = "both"
 ):
 
-    """
-    Main alignment function. Reads are batched and 
-    """
-
-    path_to_incorrect_index_file = (
-        "/home/shreyas/NLP/dna2vec/evaluate/test_cache/logs" + "incorrect_index.jsonl"
-    )
-    path_to_incorrect_align_file = (
-        "/home/shreyas/NLP/dna2vec/evaluate/test_cache/logs" + "incorrect_align.jsonl"
-    )
+    path_to_incorrect_index_file = "test_cache/logs/" + "incorrect_index.jsonl"
+    path_to_incorrect_align_file = "test_cache/logs/" + "incorrect_align.jsonl"
 
     if not distributed:
 
@@ -312,7 +326,7 @@ def main_align(
             batch_indices = indices[batch_start:batch_end]
 
             returned = store.query_batch(batch_queries, batch_indices, top_k=top_k)  # 1
-            # print(returned)
+            print(returned)
             for i, returned_unit in enumerate(returned):
 
                 returned_unit_matched = returned_unit["matches"]
@@ -328,8 +342,6 @@ def main_align(
 
                 if dictionary_of_values is not None:
                     original_sequence = dictionary_of_values[returned_unit["query"]]
-                else:
-                    original_sequence = None
 
                 (
                     fragment_distances,
@@ -346,37 +358,42 @@ def main_align(
                     original_sequence,
                 )
 
+                # series = [
+                #     int(tup[0]) + int(tup[1])
+                #     for tup in zip(identified_sub_indices, identified_indices)
+                # ]
                 series = None
 
                 if flex:
 
-                    is_within_location, returned_index = is_within_range_of_any_element(
+                    is_within_range, returned_index = is_within_range_of_any_element(
                         returned_unit["index"], fragment_indices, exactness
                     )
 
-                    is_within_score = is_within_score_bound(
+                    is_within_distance = is_within_distance_bound(
+                        len(returned_unit["query"]),
                         fragment_distances,
                         distance_bound,
                         sw_original,
                     )
 
-                    smallest_score = min(fragment_distances)
+                    smallest_distance = min(fragment_distances)
                     if sw_original != -500:
                         print(
                             "Original SW distance is {} and min distance is {}".format(
-                                sw_original, smallest_score
+                                sw_original, smallest_distance
                             )
                         )
 
                     if returned_index:
-                        ideal_index_score, ideal_index_fragment = index_to_distance[
+                        ideal_index_dist, ideal_index_fragment = index_to_distance[
                             returned_index
                         ]
 
-                    if is_within_location and (ideal_index_score != smallest_score):
+                    if is_within_range and (ideal_index_dist != smallest_distance):
                         print(
                             "Mapped index distance {} does not match smallest distance {}".format(
-                                ideal_index_score, smallest_score
+                                ideal_index_dist, smallest_distance
                             )
                         )
                         # write into incorrect jsonl file
@@ -392,28 +409,58 @@ def main_align(
                                 metadata,
                                 fragment,
                                 read,
-                            ) in distance_to_index[smallest_score]:
+                            ) in distance_to_index[smallest_distance]:
                                 min_sw_dist_fragments.append(fragment)
 
+                            # Read
+                            # Fragment 1
+                            # Fragment 1 SW distance
+                            # Fragment 2
+                            # Fragment 2 SW distance
                             writer.write(
                                 {
                                     "read_index": returned_unit["index"],
                                     "best_index": returned_index,
-                                    "smallest_SW_distance": smallest_score,
-                                    "best_index_SW_distance": ideal_index_score,
+                                    "smallest_SW_distance": smallest_distance,
+                                    "best_index_SW_distance": ideal_index_dist,
                                     "read": str(returned_unit["query"]),
                                     "smallest_SW_fragments": min_sw_dist_fragments,
                                     "best_index_SW_fragments": ideal_index_fragment,
                                 }
                             )
 
-                    if is_within_location or is_within_score:
-                        print("MATCH FOUND")
+                    if (is_within_range and match) or is_within_distance:
                         finer_flag[batch_start + i, 0] = 1
                     else:
                         # Store information of failed aligment examples to run again with higher topk
                         finer_flag[batch_start + i, 0] = 0
 
+                        with jsonlines.open(
+                            path_to_incorrect_align_file, mode="a"
+                        ) as writer:
+
+                            print(
+                                "Alignment not found min SW is {}".format(
+                                    smallest_distance
+                                )
+                            )
+
+                            writer.write(
+                                {
+                                    "smallest_SW_distance": smallest_distance,
+                                    "original_SW_distance": sw_original,
+                                    "read": str(returned_unit["query"]),
+                                    "read_index": returned_unit["index"],
+                                    "closest_fragment": str(
+                                        distance_to_index[smallest_distance]
+                                    ),
+                                }
+                            )
+
+                        missed_queries[returned_unit["query"]] = (
+                            returned_unit["index"],
+                            returned_unit["namespace"],
+                        )
                 else:
                     if ((returned_unit["index"] in series) and match) or abs(
                         smallest_distance + 2 * len(returned_unit["query"])
@@ -422,13 +469,37 @@ def main_align(
                     else:
                         finer_flag[batch_start + i, 0] = 0
 
+                # if dictionary_of_values is not None:
+                #     dictionary_of_values[returned_unit["query"]].append(
+                #         bool(finer_flag[batch_start + i, 0])
+                #     )
 
-        successes = np.sum(finer_flag)
-        trials = num_queries
-        lower_bound, upper_bound = clopper_pearson_interval(successes, trials)
+        # if dictionary_of_values is not None:
+        #     return [finer_flag[:num_queries, 0], dictionary_of_values]
 
+        return finer_flag[:num_queries, 0], missed_queries
 
-        return finer_flag[:num_queries, 0], lower_bound, upper_bound
+        #         if flex:
+        #             if (
+        #                 is_within_range_of_any_element(
+        #                     returned_unit["index"], series, exactness
+        #                 )
+        #                 and match
+        #             ) or abs(
+        #                 smallest_distance + 2 * len(returned_unit["query"])
+        #             ) < distance_bound + 1:
+        #                 finer_flag[batch_start + i, 0] = 1
+        #             else:
+        #                 finer_flag[batch_start + i, 0] = 0
+        #         else:
+        #             if ((returned_unit["index"] in series) and match) or abs(
+        #                 smallest_distance + 2 * len(returned_unit["query"])
+        #             ) < 1:
+        #                 finer_flag[batch_start + i, 0] = 1
+        #             else:
+        #                 finer_flag[batch_start + i, 0] = 0
+
+        # return finer_flag[:num_queries, 0]
 
     else:  # recall - hotstart
 
@@ -477,53 +548,19 @@ def main_align(
 
                 if dictionary_of_values is not None:
                     original_sequence = dictionary_of_values[returned_unit["query"]]
-                else:
-                    original_sequence = None
 
                 # Attempt at getting rid of SW distance computation
-                # candidate_subsequence, candidate_score, candidate_edit_dist = (
-                #     get_sw_less_matching(
-                #         all_candidate_strings, returned_unit["query"], model=store.model
-                #     )
-                # )
+                candidate_fragment, candidate_score = get_sw_less_matching(
+                    all_candidate_strings, returned_unit["query"], model=store.model
+                )
 
-                # edit_distance_og_subs = levenshtein_distance(
-                #         original_sequence, candidate_subsequence
-                #     )
+                if candidate_fragment == returned_unit["query"]:
+                    print("MATCH FOUND")
 
-                # # print("Original Read is {}".format(original_sequence))
-                # # print("Read used is {}".format(returned_unit["query"]))
-                # # print("Candidate fragment is {}".format(candidate_subsequence))
+                else:
+                    print("HAVE NOT FOUND AN EXACT MATCH")
 
-                # if candidate_edit_dist == 0 or edit_distance_og_subs == 0:
-                #     print("MATCH FOUND")
-                #     print("Edit distance is {}".format(candidate_edit_dist))
-                #     finer_flag[batch_start + i, 0] = 1
-
-                # else:
-
-                #     finer_flag[batch_start + i, 0] = 0
-                #     edit_distance_og_read = levenshtein_distance(
-                #         original_sequence, returned_unit["query"]
-                #     )
-
-                #     print(
-                #         "Edit distance between original read and read is {}".format(
-                #             edit_distance_og_read
-                #         )
-                #     )
-                #     print(
-                #         "Edit distance between original read and candidate fragment is {}".format(
-                #             edit_distance_og_subs
-                #         )
-                #     )
-                #     print("Original Read is {}".format(original_sequence))
-                #     print("Read used is {}".format(returned_unit["query"]))
-                #     print("Candidate fragment is {}".format(candidate_subsequence))
-
-                #     # print("HAVE NOT FOUND AN EXACT MATCH")
-
-                # continue
+                continue
 
                 # This step computes the SW distance, question is can we do away with this?
                 (
@@ -541,13 +578,19 @@ def main_align(
                     original_sequence,
                 )
 
+                # series = [
+                #     int(tup[0]) + int(tup[1])
+                #     for tup in zip(identified_sub_indices, identified_indices)
+                # ]
+
                 if flex:
 
-                    is_within_location, returned_index = is_within_range_of_any_element(
+                    is_within_range, returned_index = is_within_range_of_any_element(
                         returned_unit["index"], fragment_indices, exactness
                     )
 
-                    is_within_score = is_within_score_bound(
+                    is_within_distance = is_within_distance_bound(
+                        len(returned_unit["query"]),
                         fragment_distances,
                         distance_bound,
                         sw_original,
@@ -566,32 +609,77 @@ def main_align(
                             returned_index
                         ]
 
-                    if is_within_location and (ideal_index_dist != smallest_distance):
+                    if is_within_range and (ideal_index_dist != smallest_distance):
                         print(
                             "Mapped index distance {} does not match smallest distance {}".format(
                                 ideal_index_dist, smallest_distance
                             )
                         )
+                        # write into incorrect jsonl file
 
-                    if compare_type == "both":
-                        if is_within_location and is_within_score:
-                            print("MATCH FOUND")
-                            finer_flag[batch_start + i, 0] = 1
-                        else:
-                            finer_flag[batch_start + i, 0] = 0
-                    elif compare_type == "location":
-                        if is_within_location:
-                            print("MATCH FOUND BY LOCATION")
-                            finer_flag[batch_start + i, 0] = 1
-                        else:
-                            finer_flag[batch_start + i, 0] = 0
-                    elif compare_type == "score":
-                        if is_within_score:
-                            print("MATCH FOUND BY SCORE")
-                            finer_flag[batch_start + i, 0] = 1
-                        else:
-                            finer_flag[batch_start + i, 0] = 0
+                        with jsonlines.open(
+                            path_to_incorrect_index_file, mode="a"
+                        ) as writer:
 
+                            min_sw_dist_fragments = []
+                            for (
+                                starting_sub_index,
+                                train_pos,
+                                metadata,
+                                fragment,
+                                read,
+                            ) in distance_to_index[smallest_distance]:
+                                min_sw_dist_fragments.append(fragment)
+
+                            # Read
+                            # Fragment 1
+                            # Fragment 1 SW distance
+                            # Fragment 2
+                            # Fragment 2 SW distance
+                            writer.write(
+                                {
+                                    "read_index": returned_unit["index"],
+                                    "best_index": returned_index,
+                                    "smallest_SW_distance": smallest_distance,
+                                    "best_index_SW_distance": ideal_index_dist,
+                                    "read": str(returned_unit["query"]),
+                                    "smallest_SW_fragments": min_sw_dist_fragments,
+                                    "best_index_SW_fragments": ideal_index_fragment,
+                                }
+                            )
+
+                    if (is_within_range and match) or is_within_distance:
+                        finer_flag[batch_start + i, 0] = 1
+                    else:
+                        # Store information of failed aligment examples to run again with higher topk
+                        finer_flag[batch_start + i, 0] = 0
+
+                        with jsonlines.open(
+                            path_to_incorrect_align_file, mode="a"
+                        ) as writer:
+
+                            print(
+                                "Alignment not found min SW is {}".format(
+                                    smallest_distance
+                                )
+                            )
+
+                            writer.write(
+                                {
+                                    "smallest_SW_distance": smallest_distance,
+                                    "original_SW_distance": sw_original,
+                                    "read": str(returned_unit["query"]),
+                                    "read_index": returned_unit["index"],
+                                    "closest_fragment": str(
+                                        distance_to_index[smallest_distance]
+                                    ),
+                                }
+                            )
+
+                        missed_queries[returned_unit["query"]] = (
+                            returned_unit["index"],
+                            returned_unit["namespace"],
+                        )
                 else:
                     if ((returned_unit["index"] in series) and match) or abs(
                         smallest_distance + 2 * len(returned_unit["query"])
@@ -608,11 +696,7 @@ def main_align(
         # if dictionary_of_values is not None:
         #     return [finer_flag[:num_queries, 0], dictionary_of_values]
 
-        successes = np.sum(finer_flag)
-        lower_bound, upper_bound = clopper_pearson_interval(successes, num_queries)
-
-
-        return finer_flag[:num_queries, 0], lower_bound, upper_bound
+        return finer_flag[:num_queries, 0], missed_queries
 
 
 def read_fasta_chromosomes(file_path):
@@ -661,40 +745,36 @@ def read_fasta_chromosomes(file_path):
             yield (header, sequence)
 
 
-def is_within_range_of_any_element(X: int, Y: list, exactness: int):
-    """
-    Check if the read is within the range of the fragment
-    """
+def is_within_range_of_any_element(X: int, Y: list, Z: int):
     for element in Y:
-        if abs(X - element) <= exactness:
+        if abs(X - element) <= Z:
             return True, element
 
     return False, None
 
 
-def is_within_score_bound(
-    read_sw_distances: list, score_bound: int, sw_original: int
+def is_within_distance_bound(
+    read_length: int, read_sw_distances: list, distance_bound: int, sw_original: int
 ):
     """
-    Check if smith waterman score between fragment and read is within the score bound
+    Check if smith waterman distance between fragment and read is within the distance bound
     """
 
     for dist in read_sw_distances:
         if sw_original is not None:
-            if dist - sw_original <= score_bound:
+            if dist - sw_original <= distance_bound:
                 return True
 
     return False
 
 
 def initialize_pinecone(
-    checkpoint_queue: list[str], data_queue: list[str], device: str, pod_type: str
+    checkpoint_queue: list[str], data_queue: list[str], device: str
 ):
     """
     Inputs : checkpoint_queue -> model checkpoints.
                 data_queue -> data sources.
                 device -> device to run the model on.
-                pod_type -> pod type to run the Pinecone index on.
 
     Outputs: Yields a PineconeStore object, data_alias and config.
     """
@@ -704,10 +784,10 @@ def initialize_pinecone(
     for alias in checkpoint_queue:
 
         # Check if provided alias is in the models trained and not baseline.
-        if alias in configs["checkpoints"] and configs["checkpoints"][alias] != "Baseline":
-            received = torch.load(configs["checkpoints"][alias], map_location="cpu")
+        if alias in checkpoints and checkpoints[alias] != "Baseline":
+            received = torch.load(checkpoints[alias], map_location="cpu")
             config = received["config"]
-            config.model_config.tokenizer_path = configs["checkpoints"]["tokenizer"]
+            config.model_config.tokenizer_path = checkpoints["tokenizer"]
             encoder, pooling, tokenizer = model_from_config(config.model_config)
             encoder.load_state_dict(received["model"])
             encoder.eval()
@@ -720,7 +800,7 @@ def initialize_pinecone(
             baseline_name = None
 
         # Check if model is baseline
-        elif alias in configs["checkpoints"] and configs["checkpoints"][alias] == "Baseline":
+        elif alias in checkpoints and checkpoints[alias] == "Baseline":
             model_params = None
             baseline = True
             baseline_name = alias
@@ -736,7 +816,6 @@ def initialize_pinecone(
                 model_params=model_params,
                 baseline_name=baseline_name,
                 baseline=baseline,
-                pod_type=pod_type,
             )
 
             yield store, data_alias, config
