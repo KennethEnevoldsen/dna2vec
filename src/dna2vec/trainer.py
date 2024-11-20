@@ -162,25 +162,24 @@ class ContrastiveTrainer:
             labels2 = torch.arange(sim_fragment_read2.size(0)).long().to(self.device)
 
             loss_read1 = self.loss(sim_fragment_read1, labels1)
-            loss_read2 = self.loss(sim_fragment_read2, labels2)
+            # loss_read2 = self.loss(sim_fragment_read2, labels2)
 
-            alpha = 1
-            beta = 1 - alpha
-            loss = alpha * loss_read1 + beta * loss_read2
+            # loss = loss_read1 + loss_read2
+            loss = loss_read1
 
             # Compute similarity score between y2 and y3 and add to loss
-            if sub_ex.read_regularization:
-                sim_read_read = self.similarity(
-                    read1_embedding.unsqueeze(1), read2_embedding.unsqueeze(0)
-                )
-                # Take the diagonal of the similarity matrix and sum the terms to add to the loss
-                diag_sim_read_read = torch.diag(sim_read_read)
-                normalized_read_read = torch.sum(
-                    diag_sim_read_read
-                ) / diag_sim_read_read.size(0)
-                max_sim = 0.8  # Hyperparameter that determines the maximum similarity score between the two reads
-                reg_loss = torch.abs(max_sim - normalized_read_read)
-                loss += reg_loss * self.regularizer
+            # if sub_ex.read_regularization:
+            #     sim_read_read = self.similarity(
+            #         read1_embedding.unsqueeze(1), read2_embedding.unsqueeze(0)
+            #     )
+            #     # Take the diagonal of the similarity matrix and sum the terms to add to the loss
+            #     diag_sim_read_read = torch.diag(sim_read_read)
+            #     normalized_read_read = torch.sum(
+            #         diag_sim_read_read
+            #     ) / diag_sim_read_read.size(0)
+            #     max_sim = 0.8  # Hyperparameter that determines the maximum similarity score between the two reads
+            #     reg_loss = torch.abs(max_sim - normalized_read_read)
+            #     loss += reg_loss * self.regularizer
 
             loss = loss / self.training_config.accumulation_steps
             loss.backward()
@@ -200,7 +199,6 @@ class ContrastiveTrainer:
                         "step": step,
                         "lr": current_lr,
                         "loss_read1": loss_read1,
-                        "loss_read2": loss_read2,
                     }
                 )
 
@@ -221,17 +219,12 @@ class ContrastiveTrainer:
                 labels1,
                 labels2,
                 loss,
-                loss_read2,
                 loss_read1,
-                reg_loss,
             )
 
             if sub_ex.read_regularization:
                 del (
                     read2_embedding,
-                    sim_read_read,
-                    diag_sim_read_read,
-                    normalized_read_read,
                     last_hidden_read2,
                 )
                 for k, v in read2.items():
@@ -268,9 +261,9 @@ class ContrastiveTrainer:
             save_dict,
             save_path
             / (
-                "regularization_"
+                "chromosome_2"
                 + str(self.training_config.regularizer)
-                + "_pool_"
+                + "_pool_1020_ART_READS"
                 + self.training_config.pool_type
                 + "_checkpoint.pt"
             ),

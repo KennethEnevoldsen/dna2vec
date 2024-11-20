@@ -4,6 +4,7 @@ from Bio.pairwise2 import format_alignment
 from Bio import Align
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+import jsonlines
 
 
 def calculate_smith_waterman_distance(
@@ -119,14 +120,16 @@ def bwamem_align(
 
 
 def process_single_string(args: tuple):
-    long_string, substring, train_pos, metadata = args
-    returned_object = calculate_smith_waterman_distance(long_string, substring)
+    retrieved_fragment, read, train_pos, metadata = args
+    returned_object = calculate_smith_waterman_distance(retrieved_fragment, read)
     return (
         returned_object["distance"],
         returned_object["begins"],
         train_pos,
         metadata,
         returned_object["elapsed time"],
+        retrieved_fragment,
+        read,
     )
 
 
@@ -135,7 +138,9 @@ def bwamem_align_parallel(
     trained_positions: list[str],
     metadata_set: list[str],
     substring: str,
+    orginal_read: str,
     max_workers: int = 50,
+    file_path: str = "/home/shreyas/NLP/dna2vec/Results/streamed_results.jsonl",
 ):
 
     total_time = time.time()
@@ -154,36 +159,93 @@ def bwamem_align_parallel(
             )
         )
 
-    for distance, begins, train_pos, metadata, _ in results:
+    for distance, begins, train_pos, metadata, _, fragment, read in results:
         for starting_sub_index in begins:
-            refined_results[distance].append((starting_sub_index, train_pos, metadata))
+            refined_results[distance].append(
+                (starting_sub_index, train_pos, metadata, fragment, read)
+            )
 
     try:
         smallest_key = min(refined_results.keys())
-        # print("SMALLEST KEY IS ", smallest_key)
+        print("SMALLEST KEY IS ", smallest_key)
 
-        if smallest_key > -500:
+        if smallest_key <= -495:
+
             print("SMALLEST KEY IS ", smallest_key)
+            # write into a jsonlines file
+            # print("WRITING INTO FILE")
+            # with jsonlines.open(file_path, mode="a") as writer:
+            #     for (
+            #         starting_sub_index,
+            #         train_pos,
+            #         metadata,
+            #         fragment,
+            #         read,
+            #     ) in refined_results[smallest_key]:
+            #         writer.write(
+            #             {
+            #                 "distance": str(smallest_key),
+            #                 "starting_sub_index": str(starting_sub_index),
+            #                 "train_pos": train_pos,
+            #                 "metadata": metadata,
+            #                 "fragment": fragment,
+            #                 "read": read,
+            #             }
+            #         )
+
     except ValueError:
-        return [], [], [], time.time() - total_time, None
+        print("NO RESULTS FOUND")
+        print(substring)
+        print(trained_positions)
+        return [], [], [], time.time() - total_time, None, None
 
-    smallest_values = refined_results[smallest_key]
+    # dist_indices = defaultdict(list)
+    # dist_meta = defaultdict(list)]
+    distances = set()
+    indices = set()
+    index_to_distance = dict()
+    for distance in refined_results:
+        distances.add(distance)
+        for term in refined_results[distance]:
+            indices.add(int(term[0]) + int(term[1]))
+            index_to_distance[int(term[0]) + int(term[1])] = (distance, term[-2])
+            # dist_meta[distances].append(meta)
 
-    identified_sub_indices = []
-    identified_indices = []
-    metadata_indices = []
+    # Compute SW distance between subsequence and original read
+    if orginal_read is None:
+        orig_distance = -500
+    else:
 
-    for term in smallest_values:
-        identified_sub_indices.append(term[0])
-        identified_indices.append(term[1])
-        metadata_indices.append(term[2])
+        orig_distance = calculate_smith_waterman_distance(orginal_read, substring)[
+            "distance"
+        ]
+
+    # smallest_values = refined_results[smallest_key]
+
+    # identified_sub_indices = []
+    # identified_indices = []
+    # metadata_indices = []
+
+    # for term in smallest_values:
+    #     identified_sub_indices.append(term[0])
+    #     identified_indices.append(term[1])
+    #     metadata_indices.append(term[2])
+
+    # return (
+    #     identified_sub_indices,
+    #     identified_indices,
+    #     metadata_indices,
+    #     time.time() - total_time,
+    #     smallest_key,
+    # )
 
     return (
-        identified_sub_indices,
-        identified_indices,
-        metadata_indices,
+        distances,
+        indices,
+        refined_results,
+        index_to_distance,
+        orig_distance,
         time.time() - total_time,
-        smallest_key,
     )
 
 

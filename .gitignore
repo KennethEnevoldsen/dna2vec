@@ -42,3 +42,6 @@ playground.ipynb
 Logs/
 Results/
 simulated_reads/
+
+# Data path that we dont want to push to git
+evaluate/data

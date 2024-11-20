@@ -1,15 +1,16 @@
-ch2: "/home/pholur/dna2vec/evaluate/data/chromosome_2/floodfill.pkl"
-ch3: "/home/pholur/dna2vec/evaluate/data/chromosome_3/floodfill.pkl"
+ch2: "/home/shreyas/NLP/dna2vec/evaluate/data/chromosome_2/floodfill_chromosome2.pkl"
+# ch2: "/home/shreyas/NLP/dna2vec/evaluate/data/chromosome_2/floodfill.pkl"
+ch3: "/home/shreyas/NLP/dna2vec/evaluate/data/chromosome_3/floodfill_chromosome3.pkl"
 all: "/home/shreyas/NLP/dna2vec/evaluate/data/genome/floodfill_new.pkl"
 
 ch11: "/mnt/SSD2/pholur/General_Models/data/chr11/floodfill.pkl"
-chY: "/mnt/SSD2/pholur/General_Models/data/chrY/floodfill.pkl"
+chY: "/mnt/SSD1/shreyas/dna2vec/data/data/chrY/floodfill.pkl"
 
-chimp2A: "/mnt/SSD2/pholur/General_Models/data/chimp_2a/floodfill.pkl"
-chimp2B: "/mnt/SSD2/pholur/General_Models/data/chimp_2b/floodfill.pkl"
+cp2A: "/mnt/SSD1/shreyas/dna2vec/data/data/chimp_2a/floodfill.pkl"
+cp2B: "/mnt/SSD1/shreyas/dna2vec/data/data/chimp_2b/floodfill.pkl"
 
-rat1: "/mnt/SSD2/pholur/General_Models/data/rat1/floodfill.pkl"
-rat2: "/mnt/SSD2/pholur/General_Models/data/rat2/floodfill.pkl"
+rat1: "/mnt/SSD1/shreyas/dna2vec/data/data/rat1/floodfill.pkl"
+rat2: "/mnt/SSD1/shreyas/dna2vec/data/data/rat2/floodfill.pkl"
 
 ch23Y: "/mnt/SSD2/pholur/General_Models/data/chr23Y/floodfill.pkl"
 

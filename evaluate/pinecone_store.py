@@ -14,6 +14,7 @@ import random
 from inference_models import EvalModel, Baseline
 from typing import Optional
 import concurrent.futures
+import os
 
 
 class PineconeStore:
@@ -25,6 +26,7 @@ class PineconeStore:
         model_params=None,
         baseline: bool = False,
         baseline_name: Optional[str] = None,
+        pod_type: str = "s1.x1",
     ):
         if model_params is None and not baseline:
             raise ValueError("Model params are empty.")
@@ -38,17 +40,19 @@ class PineconeStore:
                 device=device,
             )
 
+        self.api_key = os.environ.get("PINECONE_API_KEY")
+        if self.api_key is None:
+            raise ValueError("PINECONE_API_KEY environment variable is not set")
+        
         if "config-" in index_name:  # premium account
-            self.api_key = "00807be7-ec64-48bd-9d62-67232f4c7032"
-            self.environment = "us-west4-gcp"
-
+            self.environment = os.environ.get("PINECONE_ENVIRONMENT", "us-west4-gcp")
         else:
-            raise NotImplementedError("Name not identified.")
-
-        self.initialize_pinecone_upsertion(metric, index_name)
+            raise ValueError("Index name must start with 'config-' for Pinecone Premium")
+        
+        self.initialize_pinecone_upsertion(metric, index_name, pod_type)
         self.index_name = index_name
 
-    def initialize_pinecone_upsertion(self, metric: str, index_name: str):
+    def initialize_pinecone_upsertion(self, metric: str, index_name: str, pod_type: str = "s1.x1"):
 
         pinecone.init(api_key=self.api_key, environment=self.environment)
 
@@ -59,10 +63,10 @@ class PineconeStore:
             try:
                 dimension = self.model.get_sentence_embedding_dimension()
             except:
-                dimension = 384
+                dimension = 1020  # Change this based on modelling embedding size
 
             pinecone.create_index(
-                name=index_name, dimension=dimension, metric=metric, pod_type="s1.x4"
+                name=index_name, dimension=dimension, metric=metric, pod_type=pod_type
             )
 
         # now connect to the index
@@ -137,12 +141,38 @@ class PineconeStore:
         # check number of records in the index
         self.index.describe_index_stats()
 
-    # def query(self, query, top_k=5):  # consider batching if slow
-    #     # create the query vector
-    #     xq = self.model.encode(query).tolist()
-    #     # now query
-    #     xc = self.index.query(xq, top_k=top_k, include_metadata=True)
-    #     return xc
+    def query_batch_real(self, queries, top_k=5, meta=[]):  # consider batching if slow
+
+        # create the query vector
+        xqs = self.model.encode(queries).tolist()
+        all_results = []
+
+        def query_single(xq, query, single_meta=None):
+            if not single_meta:
+                xc = self.index.query(xq, top_k=top_k, include_metadata=True)
+            else:
+                xc = self.index.query(
+                    xq, top_k=top_k, include_metadata=True, namespace=single_meta
+                )
+            xc["query"] = query
+            return xc
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            if len(meta) == 0:
+                futures = [
+                    executor.submit(query_single, xq, query)
+                    for xq, query in zip(xqs, queries)
+                ]
+            else:
+                futures = [
+                    executor.submit(query_single, xq, query, single_meta)
+                    for xq, query, single_meta in zip(xqs, queries, meta)
+                ]
+
+        for future in concurrent.futures.as_completed(futures):
+            all_results.append(future.result())
+
+        return all_results
 
     def query_batch(
         self,

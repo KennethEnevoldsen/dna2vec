@@ -29,7 +29,21 @@ python stage_upstream.py --datapath data/chromosome_2/ --mode_train hard_seriali
 ### Step 2. Upstream into Pinecone
 Set up [Pinecone](https://app.pinecone.io/organizations/-NUbbjSKn59kR22U_SS6/settings/projects), a cloud-hosted vector store. You will need to subscribe to the **Free > Standard** plan found [here](https://app.pinecone.io/organizations/-NUbbjSKn59kR22U_SS6/settings/billing/plans). But don't worry, you can always delete the store after you are done using it. Simply rerun this step to populate from scratch.
 
-Use: `upsert.py`. **Note**: You will need to change the `api_key` and `environment` variables in `pinecone_store.py` to get your upsert to work. Arguments:
+Before running the upsert script, make sure to set up your Pinecone API key as an environment variable:
+
+```bash
+export PINECONE_API_KEY=your_api_key_here
+```
+
+For premium accounts, you can also set the Pinecone environment:
+
+```bash
+export PINECONE_ENVIRONMENT=your_environment_here
+```
+
+Note that when populating the vector store with the entire human genome, the pod type should be larger than the default `s1.x1`. Set to `s1.x4` atleast.
+
+Use: `upsert.py`. Arguments:
 ```bash
 python upsert.py 
     --recipes <str list of aliases or paths to data dumps (.pkl)> 
