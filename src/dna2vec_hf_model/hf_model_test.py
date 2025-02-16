@@ -78,6 +78,36 @@ def compare_models():
         
         print("________________________________________________________")
         
+    # batch test
+    batch = []
+    batch_size = 10
+    for i in range(batch_size):
+        dummy_input = generate_dna_sequence(200)
+        batch.append(dummy_input)
+        
+    tokenized_input_hf = hf_tokenizer(batch, return_tensors="pt", padding=True)
+    tokenized_input_local = local_tokenizer.tokenize(batch).encodings
+        
+    # compare the tokenized inputs as numpy arrays
+    np_tokenized_input_hf_ids = tokenized_input_hf.input_ids.detach().numpy()
+    np_tokenized_input_local_ids = np.array([encoding.ids for encoding in tokenized_input_local]).reshape(batch_size, -1)
+    
+    # check the difference data by data
+    for i in range(batch_size):
+        print("tokenized input difference: ", np.sum(np.abs(np_tokenized_input_hf_ids[i] - np_tokenized_input_local_ids[i])))
+    
+    output_hf = hf_model(**tokenized_input_hf)
+    tokenized_input_local_ids = torch.tensor(np.array([encoding.ids for encoding in tokenized_input_local]).reshape(batch_size, -1))
+    tokenized_input_local_attention_mask = torch.tensor(np.array([encoding.attention_mask for encoding in tokenized_input_local]).reshape(batch_size, -1))
+    output_local = local_model.forward(tokenized_input_local_ids, tokenized_input_local_attention_mask)
+    
+    # compare the outputs as numpy arrays
+    np_output_hf = output_hf.detach().numpy()
+    np_output_local = output_local.detach().numpy()
+    
+    print("output difference: ", np.sum(np.abs(np_output_hf - np_output_local)))
+        
+        
         
         
 if __name__ == "__main__":

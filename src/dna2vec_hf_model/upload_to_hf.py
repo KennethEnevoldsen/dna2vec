@@ -1,10 +1,10 @@
 from dna2vec_hf_model.configuration_dna2vec import DNAEncoderConfig
 from dna2vec_hf_model.modeling_dna2vec import DNAEncoder
+from dna2vec_hf_model.tokenizer_dna2vec import BPTokenizer
+from transformers import PreTrainedTokenizerFast
 import torch
 from huggingface_hub import login
 import math
-from dna2vec.tokenizer import BPTokenizer
-from transformers import PreTrainedTokenizerFast
 DNAEncoderConfig.register_for_auto_class()
 DNAEncoder.register_for_auto_class("AutoModel")
 
@@ -34,9 +34,11 @@ del info_dict["model"]["positional_embedding.pe"]
 info_dict["model"]["positional_embedding"] = pe
 
 model.encoder.load_state_dict(info_dict["model"])
-tokenizer = BPTokenizer(vocab_size=config.vocab_size)
-tokenizer = tokenizer.load(tokenizer_path)
-tokenizer = PreTrainedTokenizerFast(tokenizer_file=tokenizer_path)
+tokenizer = BPTokenizer.load(tokenizer_path)
+tokenizer = PreTrainedTokenizerFast(tokenizer_object=tokenizer.tokenizer, unk_token="[UNK]", pad_token="[PAD]", cls_token="[CLS]", sep_token="[SEP]")
+tokenizer.save_pretrained("dna2vec_tokenizer")
+
+#TODO: IMPORTANT: We need to arrange token ids by manually changing tokenizer_config.json and tokenizer.json.
 
 # Login to Hugging Face
 login()
@@ -44,4 +46,4 @@ login()
 # Push to hub
 repo_name = "roychowdhuryresearch/dna2vec"
 model.push_to_hub(repo_name, pipeline_tag="sentence-similarity")
-tokenizer.push_to_hub(repo_name)
+tokenizer.push_to_hub(repo_name, pipeline_tag="sentence-similarity")
