@@ -51,8 +51,8 @@ def generate_dna_sequence(length=200):
 
 
 def compare_models():
-    hf_model, hf_tokenizer, _ = load_hf_model()
-    local_model, local_tokenizer, _ = load_local_model()
+    hf_model, hf_tokenizer, hf_pooler = load_hf_model()
+    local_model, local_tokenizer, local_pooler = load_local_model()
     
     for i in range(10):
         dummy_input = generate_dna_sequence(200)
@@ -97,9 +97,11 @@ def compare_models():
         print("tokenized input difference: ", np.sum(np.abs(np_tokenized_input_hf_ids[i] - np_tokenized_input_local_ids[i])))
     
     output_hf = hf_model(**tokenized_input_hf)
+    output_hf = hf_pooler(output_hf, tokenized_input_hf.attention_mask)
     tokenized_input_local_ids = torch.tensor(np.array([encoding.ids for encoding in tokenized_input_local]).reshape(batch_size, -1))
     tokenized_input_local_attention_mask = torch.tensor(np.array([encoding.attention_mask for encoding in tokenized_input_local]).reshape(batch_size, -1))
     output_local = local_model.forward(tokenized_input_local_ids, tokenized_input_local_attention_mask)
+    output_local = local_pooler(output_local, tokenized_input_local_attention_mask)
     
     # compare the outputs as numpy arrays
     np_output_hf = output_hf.detach().numpy()

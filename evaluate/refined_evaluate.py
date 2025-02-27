@@ -8,7 +8,7 @@ from itertools import product
 from omegaconf import DictConfig
 from tqdm import tqdm
 
-from helpers import initialize_pinecone, main_align, align_real_reads, query_and_align
+from helpers import initialize_pinecone, align_real_reads, query_and_align
 from dna2vec.simulate import simulate_mapped_reads
 
 
@@ -136,7 +136,23 @@ def main(cfg: DictConfig):
                         ]
 
                         print("Running alignment...")
-                        results, lower_bound, upper_bound = main_align(
+                        # results, lower_bound, upper_bound = main_align(
+                        #     store,
+                        #     queries,
+                        #     ground_truth,
+                        #     topk,
+                        #     exactness=exactness,
+                        #     distance_bound=distance_bound,
+                        #     flex=True,
+                        #     distributed=distributed,
+                        #     per_k=per_k,
+                        #     namespaces=meta if cfg.namespace else None,
+                        #     namespace_dict=meta_data_map if cfg.namespace else None,
+                        #     dictionary_of_values=dictionary_of_values,
+                        #     compare_type=cfg.compare_type,
+                        # )
+                        
+                        results_new = query_and_align(
                             store,
                             queries,
                             ground_truth,
@@ -150,33 +166,16 @@ def main(cfg: DictConfig):
                             namespace_dict=meta_data_map if cfg.namespace else None,
                             dictionary_of_values=dictionary_of_values,
                             compare_type=cfg.compare_type,
+                            return_type=cfg.return_type,
                         )
+                        if cfg.return_type == "score":
+                            total_perf_new = np.mean(results_new)
+                            print(f"TOTAL PERF NEW: {total_perf_new:.4f}")
+                            
+                        else:
+                            alignments = results_new
+                            return alignments
                         
-                        results_new, lower_bound_new, upper_bound_new = query_and_align(
-                            store,
-                            queries,
-                            ground_truth,
-                            topk,
-                            exactness=exactness,
-                            distance_bound=distance_bound,
-                            flex=True,
-                            distributed=distributed,
-                            per_k=per_k,
-                            namespaces=meta if cfg.namespace else None,
-                            namespace_dict=meta_data_map if cfg.namespace else None,
-                            dictionary_of_values=dictionary_of_values,
-                            compare_type=cfg.compare_type,
-                            return_type="score",
-                        )
-
-                        total_perf = np.mean(results)
-                        total_perf_new = np.mean(results_new)
-                        print(f"TOTAL PERF: {total_perf:.4f}")
-                        print(f"TOTAL PERF NEW: {total_perf_new:.4f}")
-                        
-                        # Calculate the difference between the two performances
-                        difference = total_perf - total_perf_new
-                        print(f"DIFFERENCE: {difference:.4f}")
 
                         # # Write results
                         # f.write(

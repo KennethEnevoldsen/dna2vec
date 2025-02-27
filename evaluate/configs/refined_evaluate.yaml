@@ -26,15 +26,17 @@ pod_type: s1.x1 # Specify the pod type to use for testing, important only if cre
 
 test_mode: true  # Enable/Disable test mode
 
+return_type: score  # Specify the type of return to use for testing [best_alignment, all_alignments, score]
+
 path_to_real_reads: "to be added"
 global_read_namespace_id: "to be added"
 
 
 paths:
-  dna2vec_cache_dir: "/home/mehmet/codebase/dna2vec"
-  log_dir: "/home/mehmet/codebase/dna2vec/Logs"
-  results_dir: "/home/mehmet/codebase/dna2vec/Results"
-  meta_headers: "/home/mehmet/codebase/dna2vec/outputs/2025-02-26/23-58-39/test_cache/logs/headers"
+  dna2vec_cache_dir: "/home/yigit/codebase/dna2vec"
+  log_dir: "/home/yigit/codebase/dna2vec/Logs"
+  results_dir: "/home/yigit/codebase/dna2vec/Results"
+  meta_headers: "/home/yigit/codebase/dna2vec/outputs/2025-02-27/01-34-27/test_cache/logs/headers"
 
 grid_search:
   read_length: [250]  # ART max read length
@@ -47,4 +49,4 @@ grid_search:
 
 configs:
   raw_fasta_files:
-    ch2: "/mnt/SSD3/yigit/dna_data/chromosome_2/"
+    ch2: "/mnt/SSD1/yigit/dna_data/chromosome_2/NC_000002.fasta"
