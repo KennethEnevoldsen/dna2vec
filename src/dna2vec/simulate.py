@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import List, Literal, Optional, Tuple, Union
 
 import pysam
-from Bio.SeqIO.FastaIO import FastaIterator
 from pysam.libcalignedsegment import AlignedSegment
 
 from dna2vec.utils import (

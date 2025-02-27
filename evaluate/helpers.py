@@ -24,9 +24,9 @@ import torch.nn as nn
 
 # Define the configuration files
 config_files = {
-    "data_recipes": "/home/mehmet/codebase/dna2vec/evaluate/configs/data_recipes.yaml",
-    "checkpoints": "/home/mehmet/codebase/dna2vec/evaluate/configs/model_checkpoints.yaml",
-    "raw_fasta_files": "/home/mehmet/codebase/dna2vec/evaluate/configs/raw.yaml"
+    "data_recipes": "/home/yigit/codebase/dna2vec/evaluate/configs/data_recipes.yaml",
+    "checkpoints": "/home/yigit/codebase/dna2vec/evaluate/configs/model_checkpoints.yaml",
+    "raw_fasta_files": "/home/yigit/codebase/dna2vec/evaluate/configs/raw.yaml"
 }
 
 def load_yaml_config(file_path):
@@ -355,13 +355,15 @@ def get_best_alignment(
         returned_unit["query"],
         original_sequence,
     )
-    
+    distance_to_index_map = dict(zip(fragment_distances, fragment_indices))
+    index_to_all_candidate_strings_map = dict(zip(fragment_indices, all_candidate_strings))
     best_distance = min(fragment_distances)
-    best_index = fragment_indices[fragment_distances.index(best_distance)]
+    best_index = distance_to_index_map[best_distance]
+    best_fragment = index_to_all_candidate_strings_map[best_index]
     
     return {
         "query": returned_unit["query"],
-        "best_fragment": all_candidate_strings[fragment_distances.index(best_distance)],
+        "best_fragment": best_fragment,
         "best_distance": best_distance,
         "best_index": best_index,
         "original_sequence": original_sequence,
@@ -397,7 +399,7 @@ def flex_scoring(returned_unit, result, finer_flag, batch_start, i, exactness, d
         result["distances"], distance_bound, result["sw_original"]
     )
     
-    smallest_distance = result["best_distance"]
+    smallest_distance = min(result["distances"])
     
     if result['sw_original'] != -500:
         print(
@@ -457,7 +459,7 @@ def flex_scoring(returned_unit, result, finer_flag, batch_start, i, exactness, d
 
 def normal_scoring(returned_unit, result, finer_flag, batch_start, i):
     """Handles normal scoring (non-flex mode)."""
-    smallest_distance = result["best_distance"]
+    smallest_distance = min(result["distances"])
     if ((returned_unit["index"] in result["indices"])) or abs(
         smallest_distance + 2 * len(returned_unit["query"])
     ) < 1:
@@ -472,7 +474,8 @@ def score_alignment(successes, trials):
 
 def query_and_align(
     store, queries, indices, top_k, exactness=0, distance_bound=0, flex=False, per_k=0,
-    batch_size=64, distributed=False, namespaces=None, namespace_dict=None, dictionary_of_values=None, return_type="best_alignment"
+    batch_size=64, distributed=False, namespaces=None, namespace_dict=None, dictionary_of_values=None, return_type="best_alignment",
+    compare_type="both"
 ):
     """Main function to align queries with stored sequences and return best alignments, all alignments, or just score."""
     path_to_incorrect_index_file = "/home/yigit/codebase/dna2vec/evaluate/test_cache/logs/incorrect_index.jsonl"
@@ -517,7 +520,7 @@ def query_and_align(
                     returned_unit, dictionary_of_values, exactness, distance_bound, flex
                 )
                 if flex:
-                    flex_scoring(returned_unit, result, finer_flag, batch_start, i, exactness, distance_bound, path_to_incorrect_index_file)
+                    flex_scoring(returned_unit, result, finer_flag, batch_start, i, exactness, distance_bound, path_to_incorrect_index_file, distributed, compare_type)
                 else:
                     normal_scoring(returned_unit, result, finer_flag, batch_start, i)
                 continue  # Skip appending to results if only score is needed
