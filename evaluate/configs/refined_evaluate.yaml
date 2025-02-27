@@ -1,0 +1,50 @@
+defaults:
+  - _self_
+
+vector_db:
+  - ch2  # Specify the reference chromosome used to populate the vector db
+
+model:
+  - huggingface  # Specify the model used to generate the embeddings
+
+num_reads: 200  # Specify the number of reads to test
+
+system: MSv3  # Specify the sequencing system to use for testing
+
+device: cuda:0  # Specify the device to use for testing
+
+namespace: true  # Enable namespace by default
+
+no_namespace: false  # Disable namespace if set to true
+
+reads:
+  - ch2  # Specify which chromosome the reads are extracted from
+
+compare_type: both  # Specify the type of comparison to use for testing [location, score, both]
+
+pod_type: s1.x1 # Specify the pod type to use for testing, important only if creating a new index
+
+test_mode: true  # Enable/Disable test mode
+
+path_to_real_reads: "to be added"
+global_read_namespace_id: "to be added"
+
+
+paths:
+  dna2vec_cache_dir: "/home/mehmet/codebase/dna2vec"
+  log_dir: "/home/mehmet/codebase/dna2vec/Logs"
+  results_dir: "/home/mehmet/codebase/dna2vec/Results"
+  meta_headers: "/home/mehmet/codebase/dna2vec/outputs/2025-02-26/23-58-39/test_cache/logs/headers"
+
+grid_search:
+  read_length: [250]  # ART max read length
+  insertion_rate: [0.01]  # ART max insertion rate
+  deletion_rate: [0.01]  # ART max deletion rate
+  qq: [[30, 60]]  # Quality score ranges
+  topk: [50]  # Number of nearest neighbors
+  distance_bound: [15]  # Score threshold
+  exactness: [2]  # Index threshold
+
+configs:
+  raw_fasta_files:
+    ch2: "/mnt/SSD3/yigit/dna_data/chromosome_2/"

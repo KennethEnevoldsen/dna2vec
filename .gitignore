@@ -45,3 +45,4 @@ simulated_reads/
 
 # Data path that we dont want to push to git
 evaluate/data
+outputs/

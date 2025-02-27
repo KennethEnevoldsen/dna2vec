@@ -1,0 +1,27 @@
+paths:
+  dna2vec_cache_dir: "/home/shreyas/NLP/dna2vec"
+  log_dir: "/home/shreyas/NLP/dna2vec/logs"
+  results_dir: "/home/shreyas/NLP/dna2vec/results"
+  config_files:
+    data_recipes: "/home/shreyas/NLP/dna2vec/evaluate/configs/data_recipes.yaml"
+    checkpoints: "/home/shreyas/NLP/dna2vec/evaluate/configs/model_checkpoints.yaml"
+    raw_fasta_files: "/home/shreyas/NLP/dna2vec/evaluate/configs/raw.yaml"
+
+vector_db: ["all"]
+model: ["trained-all-reg-mean-pooling"]
+num_reads: 200
+system: "MSv3"
+device: "cuda:0"
+pod_type: "s1.x1"
+namespace: true
+compare_type: "both"
+reads: ["all"]
+
+grid:
+  read_length: [250]
+  insertion_rate: [0.01]
+  deletion_rate: [0.01]
+  qq: [[30, 60]]
+  topk: [50]
+  distance_bound: [15]
+  exactness: [2]
