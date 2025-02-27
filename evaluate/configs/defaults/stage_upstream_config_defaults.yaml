@@ -1,0 +1,8 @@
+datapath: "data/chromosome_2/"
+mode_train: "hard_serialized"
+rawfile: "NC_000002.fasta"
+unit_length: 1000
+meta: "CH2"
+overlap: 200
+topath: "floodfill.txt"
+ntrain: 500000

@@ -1,21 +1,13 @@
 from typing import Any, List, Literal
-import argparse
 import numpy as np
 from tqdm import tqdm
 from helpers import read_fasta_chromosomes
-
-parser = argparse.ArgumentParser(description="Path to I/O data")
-parser.add_argument("--datapath", type=str)
-parser.add_argument("--mode_train", type=str)
-parser.add_argument("--rawfile", type=str)
-parser.add_argument("--unit_length", type=int)
-parser.add_argument("--meta", type=str)
-parser.add_argument("--overlap", type=int)
-parser.add_argument("--topath", type=str)
-parser.add_argument("--ntrain", type=int)
+from omegaconf import DictConfig, OmegaConf
+import hydra
+import pickle
+import os
 
 np.random.seed(42)
-
 
 class Splicer:
     def __init__(
@@ -105,17 +97,12 @@ class Splicer:
             )
 
         return subsequences
-
-
-if __name__ == "__main__":
-
-    import os
-
-    args = parser.parse_args()
-
-    data_path = args.datapath
-    raw_file = args.rawfile
-    import pickle
+    
+@hydra.main(config_path="configs", config_name="stage_upstream_config.yaml")
+def stage_upstream(cfg: DictConfig):
+    print(OmegaConf.to_yaml(cfg))
+    data_path = cfg.datapath
+    raw_file = cfg.rawfile
 
     global_dictionary = []
 
@@ -123,16 +110,16 @@ if __name__ == "__main__":
         raise FileNotFoundError("Fasta file not found error.")
 
     # meta_data = args.meta
-    to_file = "floodfill.txt" if args.topath is None else args.topath
+    to_file = "floodfill.txt" if cfg.topath is None else cfg.topath
     starting_offset = 0
 
     for header, sequence in read_fasta_chromosomes(os.path.join(data_path, raw_file)):
         sequence_obj = Splicer(sequence)
         subsequences = sequence_obj.splice(
-            mode=args.mode_train,
-            sample_length=args.unit_length,
-            number_of_sequences=args.ntrain,
-            overlap=args.overlap,
+            mode=cfg.mode_train,
+            sample_length=cfg.unit_length,
+            number_of_sequences=cfg.ntrain,
+            overlap=cfg.overlap,
             starting_offset=starting_offset,
         )
         starting_offset += sequence_obj.len_sequence
@@ -150,3 +137,8 @@ if __name__ == "__main__":
     file = open(os.path.join(data_path, to_file), "wb")
     pickle.dump(global_dictionary, file)
     file.close()
+
+
+if __name__ == "__main__":
+
+    stage_upstream()

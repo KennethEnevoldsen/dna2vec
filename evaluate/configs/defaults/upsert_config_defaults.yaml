@@ -1,0 +1,6 @@
+vector_db: ["all"]
+model: ["trained-all-reg-mean-pooling"]
+device: "cuda:0"
+add_namespace: true
+no_namespace: false
+pod_type: "s1.x1"

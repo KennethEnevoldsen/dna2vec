@@ -7,11 +7,10 @@ Unstable: https://github.com/pinecone-io/pinecone-python-client/issues
 """
 
 import string
-import pinecone
-import torch
-from tqdm import tqdm
+from pinecone.grpc import PineconeGRPC as Pinecone
+from pinecone import ServerlessSpec # PodSpec
 import random
-from inference_models import EvalModel, Baseline
+from inference_models import EvalModel, Baseline, HFModel
 from typing import Optional
 import concurrent.futures
 import os
@@ -26,12 +25,16 @@ class PineconeStore:
         model_params=None,
         baseline: bool = False,
         baseline_name: Optional[str] = None,
+        hf_model: bool = False,
+        hf_model_name: Optional[str] = None,
         pod_type: str = "s1.x1",
     ):
         if model_params is None and not baseline:
             raise ValueError("Model params are empty.")
         if baseline:
             self.model = Baseline(option=baseline_name, device=device)
+        elif hf_model:
+            self.model = HFModel(model_params["tokenizer"], model_params["model"], model_params["pooling"], device)
         else:
             self.model = EvalModel(
                 model_params["tokenizer"],
@@ -54,23 +57,23 @@ class PineconeStore:
 
     def initialize_pinecone_upsertion(self, metric: str, index_name: str, pod_type: str = "s1.x1"):
 
-        pinecone.init(api_key=self.api_key, environment=self.environment)
-
+        pc = Pinecone(api_key=self.api_key)
+        index_names = [index["name"] for index in pc.list_indexes()]
         # only create index if it doesn't exist
-        if index_name not in pinecone.list_indexes():
+        if index_name not in index_names:
             print(f"Creating new index, {index_name}")
 
             try:
                 dimension = self.model.get_sentence_embedding_dimension()
             except:
                 dimension = 1020  # Change this based on modelling embedding size
-
-            pinecone.create_index(
-                name=index_name, dimension=dimension, metric=metric, pod_type=pod_type
-            )
-
+            # pc.delete_index(index_name)
+            pc.create_index(
+                name=index_name, dimension=dimension, metric=metric, spec=ServerlessSpec(cloud="aws",region="us-east-1")
+                ) #,spec=PodSpec(pod_type=pod_type, environment=self.environment))
+                
         # now connect to the index
-        self.index = pinecone.GRPCIndex(index_name)
+        self.index = pc.Index(index_name)
 
     @staticmethod
     def batched_data_generator(file_path, batch_size):

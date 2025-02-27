@@ -1,0 +1,30 @@
+vector_db: ["all"]  # Reference chromosomes for vector DB
+model: ["trained-all-reg-mean-pooling"]  # Model for generating embeddings
+num_reads: 200  # Number of reads to test
+system: "MSv3"  # Sequencing system
+device: "cuda:0"  # Device for testing
+pod_type: "s1.x1"  # Pod type (important if creating a new index)
+namespace: true  # Enable/Disable namespace
+compare_type: "both"  # Type of comparison (location, score, both)
+reads: ["all"]  # Chromosomes from which reads are extracted
+test_mode: true  # Enable/Disable test mode
+path_to_real_reads: "to be added"
+global_read_namespace_id: "to be added"
+namespace: false
+
+
+
+paths:
+  dna2vec_cache_dir: "/home/shreyas/NLP/dna2vec"
+  log_dir: "/home/shreyas/NLP/dna2vec/Logs"
+  results_dir: "/home/shreyas/NLP/dna2vec/Results"
+  meta_headers: "test_cache/logs/headers"
+
+grid_search:
+  read_length: [250]  # ART max read length
+  insertion_rate: [0.01]  # ART max insertion rate
+  deletion_rate: [0.01]  # ART max deletion rate
+  qq: [(30, 60)]  # Quality score ranges
+  topk: [50]  # Number of nearest neighbors
+  distance_bound: [15]  # Score threshold
+  exactness: [2]  # Index threshold
