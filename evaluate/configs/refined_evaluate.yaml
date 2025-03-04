@@ -36,14 +36,14 @@ paths:
   dna2vec_cache_dir: "/home/yigit/codebase/dna2vec"
   log_dir: "/home/yigit/codebase/dna2vec/Logs"
   results_dir: "/home/yigit/codebase/dna2vec/Results"
-  meta_headers: "/home/yigit/codebase/dna2vec/outputs/2025-02-27/01-34-27/test_cache/logs/headers"
+  meta_headers: "/home/yigit/codebase/dna2vec/outputs/2025-02-27/13-44-34/test_cache/logs/headers"
 
 grid_search:
   read_length: [250]  # ART max read length
   insertion_rate: [0.01]  # ART max insertion rate
   deletion_rate: [0.01]  # ART max deletion rate
-  qq: [[30, 60]]  # Quality score ranges
-  topk: [50]  # Number of nearest neighbors
+  qq: [[60, 90]]  # Quality score ranges
+  topk: [75]  # Number of nearest neighbors
   distance_bound: [15]  # Score threshold
   exactness: [2]  # Index threshold
 

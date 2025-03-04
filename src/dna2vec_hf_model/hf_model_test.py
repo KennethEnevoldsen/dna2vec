@@ -35,7 +35,7 @@ def load_local_model():
     # Load the model weights
     info_dict = torch.load(model_path)
     model_kwargs = info_dict['config'].model_config.model_dump()
-    model_kwargs = {k: v for k, v in model_kwargs.items() if k not in ["tokenizer_path", "pooling","pos_embedding"]}
+    model_kwargs = {k: v for k, v in model_kwargs.items() if k not in ["tokenizer_path", "pooling","pos_embedding", "model_path"]}
 
     model = Encoder(**model_kwargs)
     model.load_state_dict(info_dict["model"])
@@ -75,6 +75,7 @@ def compare_models():
         np_output_local = output_local.detach().numpy()
         
         print("output difference: ", np.sum(np.abs(np_output_hf - np_output_local)))
+        print("output difference: ", np.array_equal(np_output_hf, np_output_local))
         
         print("________________________________________________________")
         
@@ -85,7 +86,7 @@ def compare_models():
         dummy_input = generate_dna_sequence(200)
         batch.append(dummy_input)
         
-    tokenized_input_hf = hf_tokenizer(batch, return_tensors="pt", padding=True)
+    tokenized_input_hf = hf_tokenizer(batch, return_tensors="pt" , padding=True)
     tokenized_input_local = local_tokenizer.tokenize(batch).encodings
         
     # compare the tokenized inputs as numpy arrays
@@ -108,7 +109,7 @@ def compare_models():
     np_output_local = output_local.detach().numpy()
     
     print("output difference: ", np.sum(np.abs(np_output_hf - np_output_local)))
-        
+    print("output difference: ", np.array_equal(np_output_hf, np_output_local))
         
         
         
