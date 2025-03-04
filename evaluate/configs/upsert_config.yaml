@@ -9,8 +9,8 @@ device: "cuda:0"
 add_namespace: true
 no_namespace: false
 recipes: ["ch2"]
-pod_type: "s1.x1"
+pod_type: "s1.x4"
 checkpoints : ["huggingface"]
 data_recipes:
   ch2:
-    - /mnt/SSD3/yigit/dna_data/chromosome_2/floodfill.txt
+    - /mnt/SSD1/yigit/dna_data/chromosome_2/floodfill.txt

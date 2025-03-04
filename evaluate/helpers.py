@@ -17,7 +17,7 @@ from aligners.smith_waterman import bwamem_align_parallel
 from dna2vec.model import model_from_config
 from inference_models import EvalModel
 from pinecone_store import PineconeStore
-
+from dna2vec.config_schema import ModelConfigSchema
 from transformers import AutoModel, AutoTokenizer
 import torch.nn as nn
 
@@ -908,6 +908,8 @@ def initialize_pinecone(
     for alias in checkpoint_queue:
         
         if alias == "huggingface":
+            print("Huggingface Model")
+            print("______________________")
             model, tokenizer, pooling = load_hf_model()
             model_params = {
                 "tokenizer": tokenizer,
@@ -919,13 +921,16 @@ def initialize_pinecone(
             hf_model = True
             hf_model_name = alias
         else:
-
             # Check if provided alias is in the models trained and not baseline.
             if alias in configs["checkpoints"] and configs["checkpoints"][alias] != "Baseline":
+                print(f"{alias} Model")
+                print("______________________")
                 received = torch.load(configs["checkpoints"][alias], map_location="cpu")
                 config = received["config"]
-                config.model_config.tokenizer_path = configs["checkpoints"]["tokenizer"]
-                encoder, pooling, tokenizer = model_from_config(config.model_config)
+                model_config = config.model_config.model_dump()
+                model_config["tokenizer_path"] = configs["checkpoints"]["tokenizer"]
+                model_config = ModelConfigSchema(**model_config)
+                encoder, pooling, tokenizer = model_from_config(model_config)
                 encoder.load_state_dict(received["model"])
                 encoder.eval()
                 model_params = {
@@ -961,7 +966,6 @@ def initialize_pinecone(
                 hf_model_name=hf_model_name,
                 pod_type=pod_type,
             )
-
             yield store, data_alias, config
 
 

@@ -136,23 +136,7 @@ def main(cfg: DictConfig):
                         ]
 
                         print("Running alignment...")
-                        # results, lower_bound, upper_bound = main_align(
-                        #     store,
-                        #     queries,
-                        #     ground_truth,
-                        #     topk,
-                        #     exactness=exactness,
-                        #     distance_bound=distance_bound,
-                        #     flex=True,
-                        #     distributed=distributed,
-                        #     per_k=per_k,
-                        #     namespaces=meta if cfg.namespace else None,
-                        #     namespace_dict=meta_data_map if cfg.namespace else None,
-                        #     dictionary_of_values=dictionary_of_values,
-                        #     compare_type=cfg.compare_type,
-                        # )
-                        
-                        results_new = query_and_align(
+                        alignments, lower_bound, upper_bound = query_and_align(
                             store,
                             queries,
                             ground_truth,
@@ -168,12 +152,17 @@ def main(cfg: DictConfig):
                             compare_type=cfg.compare_type,
                             return_type=cfg.return_type,
                         )
+                        
                         if cfg.return_type == "score":
-                            total_perf_new = np.mean(results_new)
-                            print(f"TOTAL PERF NEW: {total_perf_new:.4f}")
+                            total_perf = np.mean(results)
+                            print(f"TOTAL PERFORMANCE: {total_perf:.4f}")
+                            print(f"LOWER BOUND: {lower_bound:.4f}")
+                            print(f"UPPER BOUND: {upper_bound:.4f}")
                             
+                            return results, total_perf, lower_bound, upper_bound
+
                         else:
-                            alignments = results_new
+                            alignments = results
                             return alignments
                         
 

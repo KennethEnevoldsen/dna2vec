@@ -8,7 +8,7 @@ Unstable: https://github.com/pinecone-io/pinecone-python-client/issues
 
 import string
 from pinecone.grpc import PineconeGRPC as Pinecone
-from pinecone import ServerlessSpec # PodSpec
+from pinecone import PodSpec # ServerlessSpec
 import random
 from inference_models import EvalModel, Baseline, HFModel
 from typing import Optional
@@ -69,8 +69,7 @@ class PineconeStore:
                 dimension = 1020  # Change this based on modelling embedding size
             # pc.delete_index(index_name)
             pc.create_index(
-                name=index_name, dimension=dimension, metric=metric, spec=ServerlessSpec(cloud="aws",region="us-east-1")
-                ) #,spec=PodSpec(pod_type=pod_type, environment=self.environment))
+                name=index_name, dimension=dimension, metric=metric, spec=PodSpec(pod_type=pod_type, environment=self.environment)) #spec=ServerlessSpec(cloud="aws",region="us-east-1")
                 
         # now connect to the index
         self.index = pc.Index(index_name)
@@ -230,7 +229,8 @@ class PineconeStore:
         return all_results
 
     def drop_table(self):  # times out for large data!
-        pinecone.delete_index(self.index_name)
+        pc = Pinecone(api_key=self.api_key)
+        pc.delete_index(self.index_name)
 
 
 if __name__ == "__main__":
