@@ -26,7 +26,7 @@ class Splicer:
         self.sequence = sequence
         self.len_sequence = len(self.sequence)
 
-    def splice(
+    def generate_subsequences(
         self,
         mode: Literal["random", "fixed", "hard_serialized"] = "random",
         sample_length: Any = None,
@@ -99,7 +99,7 @@ class Splicer:
         return subsequences
     
 @hydra.main(config_path="configs", config_name="stage_upstream_config.yaml")
-def stage_upstream(cfg: DictConfig):
+def process_fasta_and_store_subsequences(cfg: DictConfig):
     print(OmegaConf.to_yaml(cfg))
     data_path = cfg.datapath
     raw_file = cfg.rawfile
@@ -115,7 +115,7 @@ def stage_upstream(cfg: DictConfig):
 
     for header, sequence in read_fasta_chromosomes(os.path.join(data_path, raw_file)):
         sequence_obj = Splicer(sequence)
-        subsequences = sequence_obj.splice(
+        subsequences = sequence_obj.generate_subsequences(
             mode=cfg.mode_train,
             sample_length=cfg.unit_length,
             number_of_sequences=cfg.ntrain,
@@ -141,4 +141,4 @@ def stage_upstream(cfg: DictConfig):
 
 if __name__ == "__main__":
 
-    stage_upstream()
+    process_fasta_and_store_subsequences()
