@@ -2,7 +2,7 @@ from helpers import initialize_pinecone
 from omegaconf import DictConfig
 import hydra
 
-def execute(checkpoint_queue: list, data_queue: list, device: str, add_namespace: bool, pod_type: str, data_recipes: dict):
+def process_and_upsert_data(checkpoint_queue: list, data_queue: list, device: str, add_namespace: bool, pod_type: str, data_recipes: dict):
     store_generator = initialize_pinecone(checkpoint_queue, data_queue, device, pod_type)
     for store, data_alias, _ in store_generator:
         list_of_data_sources = []
@@ -20,7 +20,7 @@ def execute(checkpoint_queue: list, data_queue: list, device: str, add_namespace
 def upsert(cfg: DictConfig):
     data_queue = cfg.vector_db
     checkpoint_queue = cfg.model
-    execute(checkpoint_queue, data_queue, cfg.device, cfg.add_namespace, cfg.pod_type, cfg.data_recipes)
+    process_and_upsert_data(checkpoint_queue, data_queue, cfg.device, cfg.add_namespace, cfg.pod_type, cfg.data_recipes)
 
 
 

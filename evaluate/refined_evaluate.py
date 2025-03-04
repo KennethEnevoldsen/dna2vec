@@ -136,7 +136,7 @@ def main(cfg: DictConfig):
                         ]
 
                         print("Running alignment...")
-                        alignments, lower_bound, upper_bound = query_and_align(
+                        results, lower_bound, upper_bound = query_and_align(
                             store,
                             queries,
                             ground_truth,
