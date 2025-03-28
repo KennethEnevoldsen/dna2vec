@@ -8,118 +8,9 @@ from datetime import datetime
 from itertools import product
 from omegaconf import DictConfig
 from tqdm import tqdm
-from helpers import initialize_pinecone, align_real_reads, query_and_align
+from helpers import initialize_pinecone, align_real_reads, query_and_align, calculate_SW_and_Cosine_similarity
 from dna2vec.simulate import real_mapped_reads #simulate_mapped_reads
-
-# Post-process results to check if match.start is within [index, index+1250]
-def post_process_results(results, mapped_reads, queries):
-    """
-    For each dictionary in results, check if the corresponding match.read.reference_start 
-    is within [index, index+1250] for any index in the dictionary's indices field.
-    
-    Args:
-        results: List of dictionaries from query_and_align
-        mapped_reads: List of ReadAndReference objects
-        queries: List of query sequences
-        
-    Returns:
-        DataFrame with columns for read, result, reference_interval, and cigar_string
-        List of 1s and 0s indicating if the condition is met for each query
-    """
-    processed_results = []
-    df_data = []
-    
-    # Create a mapping from query sequence to mapped_read
-    query_to_read = {read.read.query_sequence: read for read in mapped_reads}
-    
-    for i, result_dict in enumerate(results):
-        query = result_dict["query"]
-        all_candidate_strings = result_dict["fragments"]
-        index_to_trained_positions = result_dict["trained_positions"]
-        indices = result_dict["indices"]
-        
-        # Get the corresponding mapped_read
-        mapped_read = query_to_read.get(query)
-        
-        if mapped_read and index_to_trained_positions:
-            # Check if reference_start is within [index, index+1250] for any index
-            read_reference_start = mapped_read.read.reference_start
-            cigar_string = mapped_read.read.cigarstring
-            
-            # Find the matching index (if any)
-            matching_trained_position = None
-            best_distance = None
-            best_fragment_distance = None
-            best_fragment = None
-            is_top_match = False
-            topk_index = None
-            is_best_frag_dist_aligns_best_sw_dist = False
-            best_fragment_start_index = None
-            is_best_frag_start_idx_eq_read_ref_start_idx = False
-            # sort trained_positions by index which is the key of the dictionary
-            index_to_trained_positions = {index: index_to_trained_positions[index] for index in indices}
-            returned_topk_data = [data for key, data in dict(result_dict["distance_to_index"]).items()][:75]
-            returned_topk_data = [data_value[0] for data_value in returned_topk_data]
-            # sort returned_topk_data wrt all_candidate_strings, every data_value is a tuple (index,index, _, candidate_string)
-            returned_topk_data_sorted = sorted(returned_topk_data, key=lambda x: all_candidate_strings.index(x[3]))
-            for enum, (index_start,trained_pos,_,candidate_string,_) in enumerate(returned_topk_data_sorted):
-                index = index_start + int(trained_pos)
-                trained_position = index_to_trained_positions[index]
-                if trained_position <= read_reference_start <= trained_position + 1250:
-                    matching_trained_position = trained_position
-                    is_top_match = True if enum == 0 else False
-                    # find the index of the index in the sorted index_to_distance wrt distance
-                    topk_index = enum
-                    best_fragment = candidate_string
-                    best_distance = min(result_dict["distances"])
-                    best_fragment_distance = result_dict["index_to_distance"][index][0]
-                    is_best_frag_dist_aligns_best_sw_dist = True if best_fragment_distance == best_distance else False
-                    best_fragment_start_index = index
-                    is_best_frag_start_idx_eq_read_ref_start_idx = True if best_fragment_start_index == read_reference_start else False
-            # Set result to 1 if there's a matching index, 0 otherwise
-            result = 1 if matching_trained_position is not None else 0
-            processed_results.append(result)
-            
-            # Determine reference interval
-            reference_interval = f"[{matching_trained_position}, {matching_trained_position + 1250}]" if matching_trained_position is not None else "No match"
-            
-            # Add row to dataframe data
-            df_data.append({
-                "read": query,  # Read sequence
-                "read_reference_start_index": read_reference_start,  # Index where the read starts in the reference
-                "cigar_string": cigar_string,  # CIGAR string
-                "reference_interval": reference_interval,  # Reference interval
-                "is_exists_in_topk_fragments": result,  # Is the read in the topk fragments
-                
-                # TopK match information
-                "topk_index": topk_index,  # Index of the topk match
-                "is_top_match": is_top_match,  # Is top match in topk
-                
-                # Fragment information
-                "best_fragment": best_fragment,  # Best fragment w.r.t position
-                "best_fragment_start_index": best_fragment_start_index,  # Index of the best fragment
-                
-                # Distance metrics
-                "best_distance_in_topk": best_distance,  # Best distance in topk
-                "best_fragment_distance": best_fragment_distance,  # Distance of the best fragment w.r.t position
-                "is_best_frag_dist_aligns_best_sw_dist": is_best_frag_dist_aligns_best_sw_dist,  # Is the best fragment distance aligns with the best sw distance
-                "is_best_fragment_start_index_equal_to_index": is_best_frag_start_idx_eq_read_ref_start_idx  # Is the best fragment start index equals to the read reference start index
-            })  
-        else:
-            processed_results.append(0)
-            # Add row to dataframe data for reads with no matches
-            df_data.append({
-                "read": query,
-                "result": 0,
-                "reference_start": "N/A",
-                "reference_interval": "No match",
-                "cigar_string": "N/A" if not mapped_read else mapped_read.read.cigarstring
-            })
-    
-    # Create dataframe
-    results_df = pd.DataFrame(df_data)
-    
-    return processed_results, results_df
+import matplotlib.pyplot as plt
 
 # Ensure environment variables are set for DNA2VEC
 def set_env(dna2vec_cache_dir):
@@ -229,6 +120,55 @@ def main(cfg: DictConfig):
                             bam_file=bam_file,
                             reference_genome=fasta_file_path,
                         )
+                        
+                        print(f"MAPPED READS: {len(mapped_reads)}")
+                        
+                        distance_df = pd.DataFrame(columns=["Read", "Reference", "Smith-Waterman Similarity"])
+                        for read in mapped_reads:
+                            sw_score, cosine_score = calculate_SW_and_Cosine_similarity(read.read.query_sequence, read.reference.upper())
+                            match_start_index = read.read.reference_start
+                            distance_df = pd.concat([distance_df, pd.DataFrame([{"Read": read.read.query_sequence,"Start Index":match_start_index, "Smith-Waterman Similarity": sw_score, "CIGAR String": read.read.cigarstring, "CIGAR Tuples": read.read.cigartuples}])], ignore_index=True)
+                        
+                        print(f"Number of items: {distance_df.shape[0]}")
+                        
+                        print(f"Number of items which has SW distance < -495: {distance_df[distance_df['Smith-Waterman Similarity'] < -495].shape[0]}")
+                        print(f"Number of items which has SW distance < -400: {distance_df[distance_df['Smith-Waterman Similarity'] < -400].shape[0]}")
+                        print(f"Number of items which has SW distance < -300: {distance_df[distance_df['Smith-Waterman Similarity'] < -300].shape[0]}")
+                        print(f"Number of items which has SW distance < -200: {distance_df[distance_df['Smith-Waterman Similarity'] < -200].shape[0]}")
+                        print(f"Number of items which has SW distance < -100: {distance_df[distance_df['Smith-Waterman Similarity'] < -100].shape[0]}")
+                        print(f"Number of items which has SW distance < -50: {distance_df[distance_df['Smith-Waterman Similarity'] < -50].shape[0]}")
+                        
+                        # we need the indexes of the items which has SW distance < -495
+                        indexes = distance_df[distance_df['Smith-Waterman Similarity'] < -495].index
+                        print(f"Indexes of items which has SW distance < -495: {indexes}")
+                        
+                        refined_mapped_reads = [mapped_reads[i] for i in indexes]
+                        their_distance_df = distance_df #.iloc[indexes]
+                        
+                        # Plot Smith-Waterman similarity as bins for -500 to -400 in 100 bins
+                        plt.hist(distance_df['Smith-Waterman Similarity'], bins=100, range=(-500, -400))
+                        plt.title("Smith-Waterman similarity")
+                        plt.xlabel("Smith-Waterman similarity")
+                        plt.ylabel("Number of items")
+                        plt.savefig(res_folder / f"smith_waterman_similarity_{formatted_date}.png")
+                        plt.close()
+                        
+                        plt.hist(distance_df['Smith-Waterman Similarity'], bins=100, range=(-500, -450))
+                        plt.title("Smith-Waterman similarity")
+                        plt.xlabel("Smith-Waterman similarity")
+                        plt.ylabel("Number of items")
+                        plt.savefig(res_folder / f"smith_waterman_similarity_450_to_500_{formatted_date}.png")
+                        plt.close()
+                        
+                        # Plot Cosine similarity as bins for 0.8 to 1 in 100 bins
+                        # plt.hist(distance_df['Cosine Similarity'], bins=100, range=(0.8, 1))
+                        # plt.title("Cosine similarity")
+                        # plt.xlabel("Cosine similarity")
+                        # plt.ylabel("Number of items")
+                        # plt.savefig(res_folder / f"cosine_similarity_{formatted_date}.png")
+                        # plt.close()
+                        
+                        distance_df.to_csv(res_folder / f"distance_df_{formatted_date}.csv", index=False)
 
                         queries = []
                         small_indices = []
@@ -250,7 +190,7 @@ def main(cfg: DictConfig):
                         ]
 
                         print("Running alignment...")
-                        results, lower_bound, upper_bound, results_list = query_and_align(
+                        results, lower_bound, upper_bound, our_distance_df = query_and_align(
                             store,
                             queries,
                             ground_truth,
@@ -267,15 +207,19 @@ def main(cfg: DictConfig):
                             return_type=cfg.return_type,
                         )
                         
-                        processed_results, results_df = post_process_results(results_list, mapped_reads, queries)
                         
-                        # Save the dataframe to CSV
-                        results_dir = Path(cfg.paths.results_dir)
-                        results_dir.mkdir(parents=True, exist_ok=True)
-                        results_df_file = results_dir / f"results_df_{formatted_date}_topk_{topk}.csv"
-                        results_df.to_csv(results_df_file, index=False)
-                        print(f"Results dataframe saved to {results_df_file}")
-                
+                        #Save our distance df and their distance df
+                        our_distance_df.to_csv(res_folder / f"alignment_results_{formatted_date}.csv", index=False)
+                        their_distance_df.to_csv(res_folder / f"ground_truth_{formatted_date}.csv", index=False)
+                        
+                        # merge our distance df and their distance df based on the read column and column name should be their_sw_distance
+                        merged_distance_df = pd.merge(our_distance_df, their_distance_df, on="Read", suffixes=("_alignment_results", "_ground_truth"))
+                        # add column is_RDE_better which is 1 if our_sw_distance < their_sw_distance and 0 otherwise
+                        merged_distance_df["is_RDE_better"] = (merged_distance_df["Smith-Waterman Similarity_alignment_results"] <= merged_distance_df["Smith-Waterman Similarity_ground_truth"]).astype(int)
+                        # reorder the columns so that the columns are: Read, their_Reference, our_Reference, their_sw_distance, our_sw_distance, their_cosine_similarity, our_cosine_similarity, is_RDE_better
+                        print(merged_distance_df.columns)
+                        merged_distance_df = merged_distance_df[["Read","Start Index_ground_truth", "Start Index_alignment_results", "Smith-Waterman Similarity_ground_truth", "Smith-Waterman Similarity_alignment_results", "is_RDE_better","CIGAR Tuples", "CIGAR String"]]
+                        merged_distance_df.to_csv(res_folder / f"merged_distance_df_{formatted_date}.csv", index=False)
                         
                         if cfg.return_type == "score":
                             total_perf = np.mean(results)
@@ -283,18 +227,13 @@ def main(cfg: DictConfig):
                             print(f"LOWER BOUND: {lower_bound:.4f}")
                             print(f"UPPER BOUND: {upper_bound:.4f}")
                             
-                            # Additional metrics from post-processing
-                            total_post_perf = np.mean(processed_results)
-                            print(f"POST-PROCESSING PERFORMANCE: {total_post_perf:.4f}")
+                            # print(f"TOTAL PERFORMANCE REAL: {total_perf_real:.4f}")
                             
-                            return results, total_perf, lower_bound, upper_bound, results_df
+                            return results, total_perf, lower_bound, upper_bound
 
                         else:
                             alignments = results
-                            # Calculate accuracy from post-processed results
-                            total_post_perf = np.mean(processed_results)
-                            print(f"POST-PROCESSING PERFORMANCE: {total_post_perf:.4f}")
-                            return alignments, results_df
+                            return alignments
                         
 
                         # # Write results

@@ -1,4 +1,5 @@
 ch2: "/home/shreyas/NLP/dna2vec/evaluate/data/chromosome_2/floodfill_chromosome2.pkl"
+ch2-grch38: "/home/shreyas/NLP/dna2vec/evaluate/data/chromosome_2/floodfill_chromosome2-grch38.pkl"
 # ch2: "/home/shreyas/NLP/dna2vec/evaluate/data/chromosome_2/floodfill.pkl"
 ch3: "/home/shreyas/NLP/dna2vec/evaluate/data/chromosome_3/floodfill_chromosome3.pkl"
 all: "/home/shreyas/NLP/dna2vec/evaluate/data/genome/floodfill_new.pkl"

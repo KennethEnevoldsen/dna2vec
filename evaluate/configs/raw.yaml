@@ -1,4 +1,5 @@
 ch2: "/home/shreyas/NLP/dna2vec/evaluate/data/chromosome_2/NC_000002.fasta"
+ch2-grch38: "/home/shreyas/NLP/dna2vec/evaluate/data/chromosome_2/sequence.fasta"
 ch3: "/home/shreyas/NLP/dna2vec/evaluate/data/chromosome_3/NC_000003.fasta"
 
 all: "/home/shreyas/NLP/dna2vec/evaluate/data/genome/chm13v2.0.fa"  

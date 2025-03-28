@@ -1,10 +1,7 @@
 import time
-from Bio import pairwise2
-from Bio.pairwise2 import format_alignment
 from Bio import Align
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
-import jsonlines
 
 
 def calculate_smith_waterman_distance(
@@ -203,12 +200,14 @@ def bwamem_align_parallel(
     # dist_meta = defaultdict(list)]
     distances = set()
     indices = set()
+    index_to_trained_positions = dict()
     index_to_distance = dict()
     for distance in refined_results:
         distances.add(distance)
         for term in refined_results[distance]:
             indices.add(int(term[0]) + int(term[1]))
             index_to_distance[int(term[0]) + int(term[1])] = (distance, term[-2])
+            index_to_trained_positions[int(term[0]) + int(term[1])] = int(term[1])
             # dist_meta[distances].append(meta)
 
     # Compute SW distance between subsequence and original read
@@ -245,6 +244,8 @@ def bwamem_align_parallel(
         refined_results,
         index_to_distance,
         orig_distance,
+        index_to_trained_positions,
+        all_candidate_strings,
         time.time() - total_time,
     )
 
