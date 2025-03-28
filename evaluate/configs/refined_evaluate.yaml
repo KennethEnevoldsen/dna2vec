@@ -2,7 +2,8 @@ defaults:
   - _self_
 
 vector_db:
-  - ch2  # Specify the reference chromosome used to populate the vector db
+  # - ch2-grch38  # Specify the reference chromosome used to populate the vector db
+  - ch2-hs37d5
 
 model:
   - huggingface  # Specify the model used to generate the embeddings
@@ -18,11 +19,12 @@ namespace: true  # Enable namespace by default
 no_namespace: false  # Disable namespace if set to true
 
 reads:
-  - ch2  # Specify which chromosome the reads are extracted from
+  # - ch2-grch38  # Specify which chromosome the reads are extracted from
+  - ch2-hs37d5
 
-compare_type: both  # Specify the type of comparison to use for testing [location, score, both]
+compare_type: score  # Specify the type of comparison to use for testing [location, score, both]
 
-pod_type: s1.x1 # Specify the pod type to use for testing, important only if creating a new index
+pod_type: s1.x4 # Specify the pod type to use for testing, important only if creating a new index
 
 test_mode: true  # Enable/Disable test mode
 
@@ -36,8 +38,9 @@ paths:
   dna2vec_cache_dir: "/home/yigit/codebase/dna2vec"
   log_dir: "/home/yigit/codebase/dna2vec/Logs"
   results_dir: "/home/yigit/codebase/dna2vec/Results"
-  meta_headers: "/home/yigit/codebase/dna2vec/outputs/2025-02-27/13-44-34/test_cache/logs/headers"
-
+  # meta_headers: "/home/yigit/codebase/dna2vec/outputs/2025-02-27/13-44-34/test_cache/logs/headers"
+  # meta_headers: "/home/yigit/codebase/dna2vec/outputs/2025-03-06/02-47-04/test_cache/logs/headers"
+  meta_headers: "/home/yigit/codebase/dna2vec/outputs/2025-03-25/02-50-47/test_cache/logs/headers"
 grid_search:
   read_length: [250]  # ART max read length
   insertion_rate: [0.01]  # ART max insertion rate
@@ -49,4 +52,6 @@ grid_search:
 
 configs:
   raw_fasta_files:
-    ch2: "/mnt/SSD1/yigit/dna_data/chromosome_2/NC_000002.fasta"
+    # ch2: "/mnt/SSD1/yigit/dna_data/chromosome_2/NC_000002.fasta"
+    # ch2-grch38: "/mnt/SSD1/yigit/dna_data/chromosome_2/GCA_000001405.15_GRCh38.fasta"
+    ch2-hs37d5: "/mnt/SSD1/yigit/dna_data/chromosome_2/hs37d5.fasta"

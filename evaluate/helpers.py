@@ -11,9 +11,8 @@ import yaml
 from Levenshtein import distance as levenshtein_distance
 from tqdm import tqdm
 import scipy.stats as stats
-
 # Local imports
-from aligners.smith_waterman import bwamem_align_parallel
+from aligners.smith_waterman import bwamem_align_parallel, calculate_smith_waterman_distance
 from dna2vec.model import model_from_config
 from inference_models import EvalModel
 from pinecone_store import PineconeStore
@@ -246,7 +245,9 @@ def align_real_reads(
                 _,
                 _,
                 sw_original,
-                _,
+                trained_positions,
+                all_candidate_strings,
+                _
             ) = bwamem_align_parallel(
                 all_candidate_strings,
                 trained_positions,
@@ -277,16 +278,16 @@ def align_real_reads(
             if is_within_score:
                 finer_flag[batch_start + i, 0] = 1
                 # write into jsonlines file
-                with jsonlines.open(
-                    "test_cache/logs/pure_reads_SW_optimal", "a"
-                ) as writer:
-                    writer.write(
-                        {
-                            "smallest_SW_distance": smallest_score,
-                            "topk": top_k,
-                            "read": str(returned_unit["query"]),
-                        }
-                    )
+                # with jsonlines.open(
+                #     "test_cache/logs/pure_reads_SW_optimal", "a"
+                # ) as writer:
+                #     writer.write(
+                #         {
+                #             "smallest_SW_distance": smallest_score,
+                #             "topk": top_k,
+                #             "read": str(returned_unit["query"]),
+                #         }
+                #     )
             else:
                 # Store information of failed aligment examples to run again with higher topk
                 finer_flag[batch_start + i, 0] = 0
@@ -310,6 +311,8 @@ def get_alignment(
         distance_to_index,
         index_to_distance,
         sw_original,
+        trained_positions,
+        all_candidate_strings,
         _,
     ) = bwamem_align_parallel(
         all_candidate_strings,
@@ -328,6 +331,7 @@ def get_alignment(
         "sw_original": sw_original,
         "distance_to_index": distance_to_index,
         "index_to_distance": index_to_distance,
+        "trained_positions": trained_positions,
     }
 
 def get_best_alignment(
@@ -347,6 +351,8 @@ def get_best_alignment(
         distance_to_index,
         index_to_distance,
         sw_original,
+        trained_positions,
+        all_candidate_strings,
         _,
     ) = bwamem_align_parallel(
         all_candidate_strings,
@@ -395,11 +401,14 @@ def flex_scoring(returned_unit, result, finer_flag, batch_start, i, exactness, d
     is_within_location, returned_index = is_within_range_of_any_element(
         returned_unit["index"], result["indices"], exactness
     )
-    is_within_score = is_within_score_bound(
+    is_within_score, returned_distance = is_within_score_bound(
         result["distances"], distance_bound, result["sw_original"]
     )
     
-    smallest_distance = min(result["distances"])
+    try:
+        smallest_distance = min(result["distances"])
+    except:
+        smallest_distance = -1
     
     if result['sw_original'] != -500:
         print(
@@ -412,13 +421,20 @@ def flex_scoring(returned_unit, result, finer_flag, batch_start, i, exactness, d
         ideal_index_score, ideal_index_fragment = result["index_to_distance"][
             returned_index
         ]
+        returned_index = int(returned_index)
         
-    if is_within_location and (ideal_index_score != smallest_distance):
-        print(
-            "Mapped index distance {} does not match smallest distance {}".format(
-                ideal_index_score, smallest_distance
-            )
-        )
+    else:
+        ideal_index_score, ideal_index_fragment = None, None
+        
+    if returned_distance:
+        ideal_index_score, ideal_index_fragment = returned_distance, result["distance_to_index"][
+            returned_distance
+            ][0][3]
+        
+        returned_index = int(result["distance_to_index"][returned_distance][0][0]) + int(result["distance_to_index"][returned_distance][0][1])
+    else:
+        ideal_index_score, ideal_index_fragment, returned_index = smallest_distance, result["distance_to_index"][smallest_distance][0][3], int(result["distance_to_index"][smallest_distance][0][0]) + int(result["distance_to_index"][smallest_distance][0][1])
+        
         if not distributed:
             log_mismatch(
                 returned_unit,
@@ -456,6 +472,8 @@ def flex_scoring(returned_unit, result, finer_flag, batch_start, i, exactness, d
             finer_flag[batch_start + i, 0] = 1
         else:
             finer_flag[batch_start + i, 0] = 0
+            
+    # return is_within_location, is_within_score, returned_index, ideal_index_score
 
 def normal_scoring(returned_unit, result, finer_flag, batch_start, i):
     """Handles normal scoring (non-flex mode)."""
@@ -523,13 +541,14 @@ def query_and_align(
                     flex_scoring(returned_unit, result, finer_flag, batch_start, i, exactness, distance_bound, path_to_incorrect_index_file, distributed, compare_type)
                 else:
                     normal_scoring(returned_unit, result, finer_flag, batch_start, i)
-                continue  # Skip appending to results if only score is needed
+                # continue #TODO: Uncomment this to skip appending to results if only score is needed
+            
             
             results.append(result)
     
     if return_type == "score":
         lower_bound, upper_bound = score_alignment(np.sum(finer_flag), num_queries)
-        return finer_flag[:num_queries, 0], lower_bound, upper_bound
+        return finer_flag[:num_queries, 0], lower_bound, upper_bound, results
     return results
 
 def main_align(
@@ -594,6 +613,8 @@ def main_align(
                     distance_to_index,
                     index_to_distance,
                     sw_original,
+                    trained_positions,
+                    all_candidate_strings,
                     timer,
                 ) = bwamem_align_parallel(
                     all_candidate_strings,
@@ -743,6 +764,8 @@ def main_align(
                     distance_to_index,
                     index_to_distance,
                     sw_original,
+                    trained_positions,
+                    all_candidate_strings,
                     timer,
                 ) = bwamem_align_parallel(
                     all_candidate_strings,
@@ -888,9 +911,9 @@ def is_within_score_bound(
     for dist in read_sw_distances:
         if sw_original is not None:
             if dist - sw_original <= score_bound:
-                return True
+                return True , dist
 
-    return False
+    return False, None #TODO: Change this to return the distance
 
 
 def initialize_pinecone(
@@ -1104,3 +1127,47 @@ def pick_from_chromosome3(path, samples, per_window=1000):
             random_lines.append((sample_subsequence(full_sequence), str(random_index)))
 
     return random_lines
+
+
+def calculate_SW_and_Cosine_similarity(
+    read: str,
+    fragment: str,
+):
+    """
+    Calculate Smith-Waterman similarity and cosine similarity between a read and a fragment.
+    """
+    def load_hf_model():
+        hf_model = AutoModel.from_pretrained("roychowdhuryresearch/dna2vec", trust_remote_code=True)
+        hf_tokenizer = AutoTokenizer.from_pretrained("roychowdhuryresearch/dna2vec", trust_remote_code=True)
+
+        class AveragePooler(nn.Module):
+            """
+            Parameter-free poolers to get the sentence embedding
+            # derived from https://github.com/princeton-nlp/SimCSE/blob/13361d0e29da1691e313a94f003e2ed1cfa97fef/simcse/models.py#LL49C1-L84C1
+            """
+
+            def __init__(self):
+                super().__init__()
+
+            def forward(self, last_hidden, attention_mask):
+                # Old previous implementation
+                return (last_hidden * attention_mask.unsqueeze(-1)).sum(1) / attention_mask.sum(
+                    -1
+                ).unsqueeze(-1)
+
+        hf_model.pooler = AveragePooler()
+        return hf_model, hf_tokenizer, hf_model.pooler
+    
+    hf_model, hf_tokenizer, hf_model.pooler = load_hf_model()
+    
+    # Calculate Smith-Waterman similarity
+    sw_score = calculate_smith_waterman_distance(read, fragment)["distance"]
+
+    # Calculate cosine similarity of the embeddings
+    read_embedding = hf_model.pooler(hf_model(**hf_tokenizer(read, return_tensors="pt")), hf_tokenizer(read, return_tensors="pt").attention_mask)
+    fragment_embedding = hf_model.pooler(hf_model(**hf_tokenizer(fragment, return_tensors="pt")), hf_tokenizer(fragment, return_tensors="pt").attention_mask)
+    cosine_score = torch.nn.functional.cosine_similarity(read_embedding, fragment_embedding).item()
+
+    return sw_score, cosine_score
+    
+    

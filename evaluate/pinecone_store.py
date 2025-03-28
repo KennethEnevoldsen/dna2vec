@@ -67,9 +67,18 @@ class PineconeStore:
                 dimension = self.model.get_sentence_embedding_dimension()
             except:
                 dimension = 1020  # Change this based on modelling embedding size
-            # pc.delete_index(index_name)
             pc.create_index(
                 name=index_name, dimension=dimension, metric=metric, spec=PodSpec(pod_type=pod_type, environment=self.environment)) #spec=ServerlessSpec(cloud="aws",region="us-east-1")
+            
+        # else:
+        #     print(f"Index already exists, {index_name}")
+        #     pc.delete_index(index_name)
+        #     try:
+        #         dimension = self.model.get_sentence_embedding_dimension()
+        #     except:
+        #         dimension = 1020  # Change this based on modelling embedding size
+        #     pc.create_index(
+        #         name=index_name, dimension=dimension, metric=metric, spec=PodSpec(pod_type=pod_type, environment=self.environment)) #spec=ServerlessSpec(cloud="aws",region="us-east-1")
                 
         # now connect to the index
         self.index = pc.Index(index_name)

@@ -1,17 +1,16 @@
 """
 Functions for simulating reads using ART as well as for reading in the simulated reads.
 """
-
 import logging
 import subprocess
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Literal, Optional, Tuple, Union
-
+import pandas as pd
 import pysam
 from pysam.libcalignedsegment import AlignedSegment
-
+from tqdm import tqdm
 from dna2vec.utils import (
     download_human_reference_genome,
     get_cache_dir,
@@ -128,6 +127,25 @@ def load_simulated_reads_from_disk(
     aligned_segments = pysam.AlignmentFile(str(sam))
     return list(aligned_segments)
 
+def load_real_reads_from_disk(
+    bam_file: Path,
+) -> list[AlignedSegment]:
+    """
+    Read in the simulated reads
+
+    Args:
+        simulated_path: Path to the simulated reads.
+
+    Returns:
+        List of aligned segments.
+    """
+    logging.info(f"Reading real reads from {bam_file}")
+    print(bam_file)
+
+    # load using pysam
+    aligned_segments = pysam.AlignmentFile(str(bam_file), "rb")
+    return aligned_segments
+
 
 def map_reads_to_reference(
     reads: List[AlignedSegment],
@@ -161,6 +179,106 @@ def map_reads_to_reference(
             assert read.query_sequence == read.seq
         seq_offset += len(seq.seq)
     return unmapped_reads
+
+def map_real_reads_to_reference(
+    reads: List[AlignedSegment],
+    reference: Optional[Path] = None,
+) -> List[ReadAndReference]:
+    """
+    Map a read to a reference genome.
+    """
+    reference = load_human_reference_genome(reference)
+
+    id2read = defaultdict(list)
+    unmapped_reads = []
+    # for read in reads.fetch("chr2",1018500,2020000):
+    #     _id = "chr2"
+
+    #     if len(unmapped_reads) > 2000:
+    #         break
+    #     unmapped_read = ReadAndReference(read=read)
+    #     id2read[_id].append(unmapped_read)
+    #     unmapped_reads.append(unmapped_read)
+
+    # === Step 1: Load chr2 deletions from VCF ===
+    deletions = []
+    vcf_path = "/home/yigit/codebase/dna2vec/human_deletions_GS_correct.vcf"
+    with open(vcf_path, "r") as f:
+        for line in f:
+            if line.startswith("#"):
+                continue
+            parts = line.strip().split("\t")
+            chrom = parts[0]
+            if chrom != "2" and chrom != "chr2":  # Accept both notations
+                continue
+            start = int(parts[1])
+            info = dict(x.split("=") for x in parts[7].split(";") if "=" in x)
+            end = int(info["END"])
+            svlen = int(info["SVLEN"])
+            if svlen > 50:
+                deletions.append((chrom, start, end))
+
+    print(f"Loaded {len(deletions)} deletions on chr2.")
+    
+    # === Step 2: Extract reads with deletions, soft clips, or skipped regions ===
+    for chrom, start, end in tqdm(deletions, desc="Processing chr2 deletions"):
+        try:
+            for read in tqdm(reads.fetch(chrom, start-249, end+249), desc="Processing reads"):
+                if read.cigartuples:
+                    has_deletion = any(op == 2 and length >= 1 for op, length in read.cigartuples)  # D
+                    has_soft_clip = any(op == 4 and length >= 50 for op, length in read.cigartuples)  # S
+                    has_skipped_region = any(op == 3 and length >= 1 for op, length in read.cigartuples)  # N
+                    
+                    if has_deletion or has_soft_clip or has_skipped_region:
+                        _id = chrom
+                        unmapped_read = ReadAndReference(read=read)
+                        id2read[_id].append(unmapped_read)
+                        unmapped_reads.append(unmapped_read)
+
+                        if len(unmapped_reads) >= 500:
+                            break
+            if len(unmapped_reads) >= 500:
+                break
+        except ValueError:
+            print(f"Region doesn't exist in BAM: {chrom}:{start}-{end}")
+            continue
+        
+    seq_offset = 0
+    for seq in reference:
+        matches = id2read[seq.id]
+        for match in matches:
+            read = match.read
+            start = read.reference_start
+            length = read.query_length
+            original_sequence = seq.seq[start : start + length]
+            match.reference = str(original_sequence)
+            match.id = seq.id
+            match.seq_offset = seq_offset
+            assert read.query_sequence == read.seq
+        seq_offset += len(seq.seq)
+    return unmapped_reads
+
+def find_reference_reads(
+    indices: List[int],
+    reads: List[str],
+    reference: Optional[Path] = None,
+) -> List[ReadAndReference]:
+    """
+    Map a read to a reference genome.
+    """
+    reference = load_human_reference_genome(reference)
+    index_query_df = pd.DataFrame({"index": indices, "query": reads})
+    original_sequences = []
+    for seq in reference:
+        for idx, (loc, query) in index_query_df.iterrows():
+            if pd.isna(loc):
+                original_sequences.append(None)
+            else:
+                start = int(loc)
+                length = len(query)
+                original_sequence = seq.seq[start : start + length]
+                original_sequences.append(original_sequence)
+    return original_sequences
 
 
 def _create_cache_path(
@@ -228,6 +346,22 @@ def simulate_mapped_reads(
 
     mapped_reads = map_reads_to_reference(
         reads=load_simulated_reads_from_disk(simulated_reads),
+        reference=reference_genome,
+    )
+
+    return mapped_reads
+
+
+def real_mapped_reads(
+    bam_file: Union[Path, None] = None,
+    reference_genome: Union[Path, None] = None,
+):
+    """
+    Simulates reads and maps them to the reference genome.
+    """
+
+    mapped_reads = map_real_reads_to_reference(
+        reads=load_real_reads_from_disk(bam_file),
         reference=reference_genome,
     )
 
