@@ -24,7 +24,7 @@ reads:
 
 compare_type: score  # Specify the type of comparison to use for testing [location, score, both]
 
-pod_type: s1.x4 # Specify the pod type to use for testing, important only if creating a new index
+pod_type: s1.x1 # Specify the pod type to use for testing, important only if creating a new index
 
 test_mode: true  # Enable/Disable test mode
 
@@ -46,7 +46,7 @@ grid_search:
   insertion_rate: [0.01]  # ART max insertion rate
   deletion_rate: [0.01]  # ART max deletion rate
   qq: [[60, 90]]  # Quality score ranges
-  topk: [75]  # Number of nearest neighbors
+  topk: [1000]  # Number of nearest neighbors
   distance_bound: [15]  # Score threshold
   exactness: [2]  # Index threshold
 
