@@ -1161,13 +1161,14 @@ def calculate_SW_and_Cosine_similarity(
     hf_model, hf_tokenizer, hf_model.pooler = load_hf_model()
     
     # Calculate Smith-Waterman similarity
-    sw_score = calculate_smith_waterman_distance(read, fragment)["distance"]
+    sw_score = calculate_smith_waterman_distance(read, fragment)[["distance"]]
+    begins = calculate_smith_waterman_distance(read, fragment)[["begins"]]
 
     # Calculate cosine similarity of the embeddings
     read_embedding = hf_model.pooler(hf_model(**hf_tokenizer(read, return_tensors="pt")), hf_tokenizer(read, return_tensors="pt").attention_mask)
     fragment_embedding = hf_model.pooler(hf_model(**hf_tokenizer(fragment, return_tensors="pt")), hf_tokenizer(fragment, return_tensors="pt").attention_mask)
     cosine_score = torch.nn.functional.cosine_similarity(read_embedding, fragment_embedding).item()
 
-    return sw_score, cosine_score
+    return sw_score, begins, cosine_score
     
     

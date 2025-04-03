@@ -228,8 +228,10 @@ def map_real_reads_to_reference(
                     has_deletion = any(op == 2 and length >= 1 for op, length in read.cigartuples)  # D
                     has_soft_clip = any(op == 4 and length >= 50 for op, length in read.cigartuples)  # S
                     has_skipped_region = any(op == 3 and length >= 1 for op, length in read.cigartuples)  # N
+                    has_insertion = any(op == 1 and length >= 50 for op, length in read.cigartuples)  # I
                     
-                    if has_deletion or has_soft_clip or has_skipped_region:
+                    #if has_deletion or has_soft_clip or has_skipped_region or has_insertion:
+                    if has_insertion:
                         _id = chrom
                         unmapped_read = ReadAndReference(read=read)
                         id2read[_id].append(unmapped_read)

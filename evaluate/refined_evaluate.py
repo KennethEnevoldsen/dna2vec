@@ -58,7 +58,7 @@ def post_process_results(results, mapped_reads, queries):
             is_best_frag_start_idx_eq_read_ref_start_idx = False
             # sort trained_positions by index which is the key of the dictionary
             index_to_trained_positions = {index: index_to_trained_positions[index] for index in indices}
-            returned_topk_data = [data for key, data in dict(result_dict["distance_to_index"]).items()][:75]
+            returned_topk_data = [data for key, data in dict(result_dict["distance_to_index"]).items()][:1000]
             returned_topk_data = [data_value[0] for data_value in returned_topk_data]
             # sort returned_topk_data wrt all_candidate_strings, every data_value is a tuple (index,index, _, candidate_string)
             returned_topk_data_sorted = sorted(returned_topk_data, key=lambda x: all_candidate_strings.index(x[3]))
