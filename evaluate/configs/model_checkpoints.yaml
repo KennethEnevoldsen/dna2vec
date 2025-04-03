@@ -1,4 +1,4 @@
-tokenizer: "/home/shreyas/NLP/dna2vec/src/model/tokenizers/dna_tokenizer_10k.json"
+tokenizer: "/mnt/SSD1/yigit/dna_data/dna_tokenizer_10k.json"
 
 # initialized-with-one-step: "/mnt/SSD5/pholur/checkpoints/checkpoint_initalialized.pt"
 # trained-ch2-1000: "/mnt/SSD5/pholur/checkpoints/checkpoint_smooth-rock-29.pt"
@@ -10,7 +10,7 @@ trained-all-longer: "/mnt/SSD5/pholur/checkpoints/checkpoint_major-flower-62.pt"
 
 trained-all-shorter: "/mnt/SSD5/pholur/checkpoints/vocal-paper-2.pt"
 
-trained-all-reg-mean-pooling: "/home/shreyas/NLP/dna2vec/models/regularization_0.0_pool_1020mean_checkpoint.pt"
+trained-all-reg-mean-pooling: "/mnt/SSD1/yigit/models/regularization_0.0_pool_1020mean_checkpoint.pt"
 trained-ch2-reg-mean-pooling: "/home/shreyas/NLP/dna2vec/models/chromosome_20.0_pool_1020_ART_READSmean_checkpoint.pt"
 trained-all-reg-mean-pooling-mid: "/home/shreyas/NLP/dna2vec/models/regularization_0.0_pool_1020_ART_READS_mean_checkpoint.pt"
 trained-all-reg-mean-pooling-nnsp: "/home/shreyas/NLP/dna2vec/models/regularization_0.0_pool_1020_ART_READS_mean_checkpoint.pt"

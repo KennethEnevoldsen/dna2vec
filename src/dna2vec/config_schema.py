@@ -13,7 +13,7 @@ from torch.optim.lr_scheduler import LRScheduler, OneCycleLR
 from torch.utils.data import Dataset
 
 from dna2vec.dataset import FastaSamplerDataset
-from dna2vec.model import AveragePooler, SinusoidalPositionalEncoding, MLP
+from dna2vec.model import AveragePooler, SinusoidalPositionalEncoding
 from dna2vec.similarity import SimilarityWithTemperature
 
 scheduler = partial(
@@ -41,7 +41,7 @@ class ModelConfigSchema(BaseModel):
     pooling: nn.Module = AveragePooler()
     max_position_embeddings: int = 1024
     tokenizer_path: Path = tokenizer_path
-    modelpath: Optional[Path] = None  # where to load the model from
+    model_path: Optional[Path] = None  # where to load the model from
 
     class Config:
         arbitrary_types_allowed = True

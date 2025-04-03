@@ -1,6 +1,5 @@
 import torch
 from typing import Literal
-from transformers import PreTrainedModel
 
 
 class EvalModel:
@@ -24,6 +23,32 @@ class EvalModel:
                 input_ids=input_data["input_ids"].to(self.device),
                 attention_mask=input_data["attention_mask"].to(self.device),
             )
+            y = self.pooling(
+                last_hidden_state,
+                attention_mask=input_data["attention_mask"].to(self.device),
+            )
+            return (
+                torch.nn.functional.normalize(y.squeeze(), dim=0).detach().cpu().numpy()
+            )
+
+class HFModel:
+    def __init__(self, tokenizer, model, pooling, device):
+
+        self.tokenizer = tokenizer
+        self.model = model
+
+        self.pooling = pooling
+        self.pooling = self.pooling.to(device)
+
+        self.model = self.model.to(device)
+        self.device = device
+
+        self.model.eval()
+
+    def encode(self, x: list):
+        with torch.no_grad():
+            input_data = self.tokenizer(x, return_tensors="pt", padding=True).to(self.device)
+            last_hidden_state = self.model(**input_data)
             y = self.pooling(
                 last_hidden_state,
                 attention_mask=input_data["attention_mask"].to(self.device),

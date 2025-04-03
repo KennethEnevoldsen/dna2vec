@@ -1,7 +1,5 @@
 # Standard library imports
 import random
-import time
-from collections import defaultdict
 from typing import List, Tuple
 
 # Third-party imports
@@ -13,20 +11,21 @@ import yaml
 from Levenshtein import distance as levenshtein_distance
 from tqdm import tqdm
 import scipy.stats as stats
-
 # Local imports
-from alignment_metrics import calculate_smith_waterman_distance
-from aligners.smith_waterman import bwamem_align, bwamem_align_parallel
+from aligners.smith_waterman import bwamem_align_parallel, calculate_smith_waterman_distance
 from dna2vec.model import model_from_config
-from inference_models import EvalModel, Baseline
+from inference_models import EvalModel
 from pinecone_store import PineconeStore
+from dna2vec.config_schema import ModelConfigSchema
+from transformers import AutoModel, AutoTokenizer
+import torch.nn as nn
 
 
 # Define the configuration files
 config_files = {
-    "data_recipes": "/home/shreyas/NLP/dna2vec/evaluate/configs/data_recipes.yaml",
-    "checkpoints": "/home/shreyas/NLP/dna2vec/evaluate/configs/model_checkpoints.yaml",
-    "raw_fasta_files": "/home/shreyas/NLP/dna2vec/evaluate/configs/raw.yaml"
+    "data_recipes": "/home/yigit/codebase/dna2vec/evaluate/configs/data_recipes.yaml",
+    "checkpoints": "/home/yigit/codebase/dna2vec/evaluate/configs/model_checkpoints.yaml",
+    "raw_fasta_files": "/home/yigit/codebase/dna2vec/evaluate/configs/raw.yaml"
 }
 
 def load_yaml_config(file_path):
@@ -43,6 +42,28 @@ configs = {key: load_yaml_config(path) for key, path in config_files.items()}
 # data_recipes = configs["data_recipes"]
 # checkpoints = configs["checkpoints"]
 # raw_fasta_files = configs["raw_fasta_files"]
+
+def load_hf_model():
+    hf_model = AutoModel.from_pretrained("roychowdhuryresearch/dna2vec", trust_remote_code=True)
+    hf_tokenizer = AutoTokenizer.from_pretrained("roychowdhuryresearch/dna2vec", trust_remote_code=True)
+
+    class AveragePooler(nn.Module):
+        """
+        Parameter-free poolers to get the sentence embedding
+        # derived from https://github.com/princeton-nlp/SimCSE/blob/13361d0e29da1691e313a94f003e2ed1cfa97fef/simcse/models.py#LL49C1-L84C1
+        """
+
+        def __init__(self):
+            super().__init__()
+
+        def forward(self, last_hidden, attention_mask):
+            # Old previous implementation
+            return (last_hidden * attention_mask.unsqueeze(-1)).sum(1) / attention_mask.sum(
+                -1
+            ).unsqueeze(-1)
+
+    hf_model.pooler = AveragePooler()
+    return hf_model, hf_tokenizer, hf_model.pooler
 
 
 def clopper_pearson_interval(successes, trials, confidence_level=0.95):
@@ -224,7 +245,9 @@ def align_real_reads(
                 _,
                 _,
                 sw_original,
-                _,
+                trained_positions,
+                all_candidate_strings,
+                _
             ) = bwamem_align_parallel(
                 all_candidate_strings,
                 trained_positions,
@@ -255,22 +278,278 @@ def align_real_reads(
             if is_within_score:
                 finer_flag[batch_start + i, 0] = 1
                 # write into jsonlines file
-                with jsonlines.open(
-                    "test_cache/logs/pure_reads_SW_optimal", "a"
-                ) as writer:
-                    writer.write(
-                        {
-                            "smallest_SW_distance": smallest_score,
-                            "topk": top_k,
-                            "read": str(returned_unit["query"]),
-                        }
-                    )
+                # with jsonlines.open(
+                #     "test_cache/logs/pure_reads_SW_optimal", "a"
+                # ) as writer:
+                #     writer.write(
+                #         {
+                #             "smallest_SW_distance": smallest_score,
+                #             "topk": top_k,
+                #             "read": str(returned_unit["query"]),
+                #         }
+                #     )
             else:
                 # Store information of failed aligment examples to run again with higher topk
                 finer_flag[batch_start + i, 0] = 0
 
     return finer_flag[:num_queries, 0]
 
+
+def get_alignment(
+    returned_unit, dictionary_of_values, exactness, distance_bound, flex
+):
+    """Returns alignment details for a single query result."""
+    returned_unit_matched = returned_unit["matches"]
+    trained_positions = [sample["metadata"]["position"] for sample in returned_unit_matched]
+    metadata_set = [sample["metadata"]["metadata"] for sample in returned_unit_matched]
+    all_candidate_strings = [sample["metadata"]["text"] for sample in returned_unit_matched]
+    original_sequence = dictionary_of_values.get(returned_unit["query"], None) if dictionary_of_values else None
+
+    (
+        fragment_distances,
+        fragment_indices,
+        distance_to_index,
+        index_to_distance,
+        sw_original,
+        trained_positions,
+        all_candidate_strings,
+        _,
+    ) = bwamem_align_parallel(
+        all_candidate_strings,
+        trained_positions,
+        metadata_set,
+        returned_unit["query"],
+        original_sequence,
+    )
+    
+    return {
+        "query": returned_unit["query"],
+        "fragments": all_candidate_strings,
+        "distances": fragment_distances,
+        "indices": fragment_indices,
+        "original_sequence": original_sequence,
+        "sw_original": sw_original,
+        "distance_to_index": distance_to_index,
+        "index_to_distance": index_to_distance,
+        "trained_positions": trained_positions,
+    }
+
+def get_best_alignment(
+    returned_unit, dictionary_of_values, exactness, distance_bound, flex
+):
+    """Returns the best alignment result for a single query result."""
+    returned_unit_matched = returned_unit["matches"]
+    trained_positions = [sample["metadata"]["position"] for sample in returned_unit_matched]
+    metadata_set = [sample["metadata"]["metadata"] for sample in returned_unit_matched]
+    all_candidate_strings = [sample["metadata"]["text"] for sample in returned_unit_matched]
+    
+    original_sequence = dictionary_of_values.get(returned_unit["query"], None) if dictionary_of_values else None
+
+    (
+        fragment_distances,
+        fragment_indices,
+        distance_to_index,
+        index_to_distance,
+        sw_original,
+        trained_positions,
+        all_candidate_strings,
+        _,
+    ) = bwamem_align_parallel(
+        all_candidate_strings,
+        trained_positions,
+        metadata_set,
+        returned_unit["query"],
+        original_sequence,
+    )
+    distance_to_index_map = dict(zip(fragment_distances, fragment_indices))
+    index_to_all_candidate_strings_map = dict(zip(fragment_indices, all_candidate_strings))
+    best_distance = min(fragment_distances)
+    best_index = distance_to_index_map[best_distance]
+    best_fragment = index_to_all_candidate_strings_map[best_index]
+    
+    return {
+        "query": returned_unit["query"],
+        "best_fragment": best_fragment,
+        "best_distance": best_distance,
+        "best_index": best_index,
+        "original_sequence": original_sequence,
+        "sw_original": sw_original,
+        "distance_to_index": distance_to_index,
+        "index_to_distance": index_to_distance,
+    }
+
+def log_mismatch(
+    returned_unit, returned_index, smallest_score, ideal_index_score, ideal_index_fragment, distance_to_index, path_to_incorrect_index_file
+):
+    """Logs incorrect alignments for further review."""
+    with jsonlines.open(path_to_incorrect_index_file, mode="a") as writer:
+        min_sw_dist_fragments = [fragment for (_, _, _, fragment, _) in distance_to_index[smallest_score]]
+        writer.write(
+            {
+                "read_index": returned_unit["index"],
+                "best_index": returned_index,
+                "smallest_SW_distance": smallest_score,
+                "best_index_SW_distance": ideal_index_score,
+                "read": str(returned_unit["query"]),
+                "smallest_SW_fragments": min_sw_dist_fragments,
+                "best_index_SW_fragments": ideal_index_fragment,
+            }
+        )
+
+def flex_scoring(returned_unit, result, finer_flag, batch_start, i, exactness, distance_bound, path_to_incorrect_index_file, distributed, compare_type):
+    """Handles scoring with flex mode."""
+    is_within_location, returned_index = is_within_range_of_any_element(
+        returned_unit["index"], result["indices"], exactness
+    )
+    is_within_score, returned_distance = is_within_score_bound(
+        result["distances"], distance_bound, result["sw_original"]
+    )
+    
+    try:
+        smallest_distance = min(result["distances"])
+    except:
+        smallest_distance = -1
+    
+    if result['sw_original'] != -500:
+        print(
+            "Original SW distance is {} and min distance is {}".format(
+                result["sw_original"], smallest_distance
+            )
+        )
+        
+    if returned_index:
+        ideal_index_score, ideal_index_fragment = result["index_to_distance"][
+            returned_index
+        ]
+        returned_index = int(returned_index)
+        
+    else:
+        ideal_index_score, ideal_index_fragment = None, None
+        
+    if returned_distance:
+        ideal_index_score, ideal_index_fragment = returned_distance, result["distance_to_index"][
+            returned_distance
+            ][0][3]
+        
+        returned_index = int(result["distance_to_index"][returned_distance][0][0]) + int(result["distance_to_index"][returned_distance][0][1])
+    else:
+        ideal_index_score, ideal_index_fragment, returned_index = smallest_distance, result["distance_to_index"][smallest_distance][0][3], int(result["distance_to_index"][smallest_distance][0][0]) + int(result["distance_to_index"][smallest_distance][0][1])
+        
+        if not distributed:
+            log_mismatch(
+                returned_unit,
+                result["best_index"],
+                result["best_distance"],
+                ideal_index_score,
+                ideal_index_fragment,
+                distance_bound,
+                result["indices"],
+                path_to_incorrect_index_file,
+            )
+        
+    if distributed:
+        if compare_type == "both":
+            if is_within_location and is_within_score:
+                print("MATCH FOUND")
+                finer_flag[batch_start + i, 0] = 1
+            else:
+                finer_flag[batch_start + i, 0] = 0
+        elif compare_type == "location":
+            if is_within_location:
+                print("MATCH FOUND BY LOCATION")
+                finer_flag[batch_start + i, 0] = 1
+            else:
+                finer_flag[batch_start + i, 0] = 0
+        elif compare_type == "score":
+            if is_within_score:
+                print("MATCH FOUND BY SCORE")
+                finer_flag[batch_start + i, 0] = 1
+            else:
+                finer_flag[batch_start + i, 0] = 0
+    
+    if not distributed:
+        if is_within_location or is_within_score:
+            finer_flag[batch_start + i, 0] = 1
+        else:
+            finer_flag[batch_start + i, 0] = 0
+            
+    # return is_within_location, is_within_score, returned_index, ideal_index_score
+
+def normal_scoring(returned_unit, result, finer_flag, batch_start, i):
+    """Handles normal scoring (non-flex mode)."""
+    smallest_distance = min(result["distances"])
+    if ((returned_unit["index"] in result["indices"])) or abs(
+        smallest_distance + 2 * len(returned_unit["query"])
+    ) < 1:
+        finer_flag[batch_start + i, 0] = 1
+    else:
+        finer_flag[batch_start + i, 0] = 0
+
+def score_alignment(successes, trials):
+    """Computes confidence interval for alignment success rate."""
+    lower_bound, upper_bound = clopper_pearson_interval(successes, trials)
+    return lower_bound, upper_bound
+
+def query_and_align(
+    store, queries, indices, top_k, exactness=0, distance_bound=0, flex=False, per_k=0,
+    batch_size=64, distributed=False, namespaces=None, namespace_dict=None, dictionary_of_values=None, return_type="best_alignment",
+    compare_type="both"
+):
+    """Main function to align queries with stored sequences and return best alignments, all alignments, or just score."""
+    path_to_incorrect_index_file = "/home/yigit/codebase/dna2vec/evaluate/test_cache/logs/incorrect_index.jsonl"
+    num_queries = len(queries)
+    results = []
+    finer_flag = np.zeros((num_queries, 1))
+    
+    for batch_start in tqdm(range(0, num_queries, batch_size)):
+        batch_end = min(batch_start + batch_size, num_queries)
+        batch_queries = queries[batch_start:batch_end]
+        batch_indices = indices[batch_start:batch_end]
+        
+        if not distributed:
+            returned = store.query_batch(batch_queries, batch_indices, top_k=top_k)
+        else:
+            if namespaces is None:
+                returned = store.query_batch(batch_queries, 
+                                             batch_indices,
+                                             hotstart_list=None,
+                                             meta_dict=None,
+                                             prioritize=True,
+                                             top_k=top_k)
+            else:
+                returned = store.query_batch(batch_queries, 
+                                             batch_indices,  
+                                             hotstart_list=namespaces[batch_start:batch_end], 
+                                             meta_dict=namespace_dict, 
+                                             prioritize=True,
+                                             top_k=per_k)
+        
+        for i, returned_unit in enumerate(returned):
+            if return_type == "alignment":
+                result = get_alignment(
+                    returned_unit, dictionary_of_values, exactness, distance_bound, flex
+                )
+            elif return_type == "best_alignment":
+                result = get_best_alignment(
+                    returned_unit, dictionary_of_values, exactness, distance_bound, flex
+                )
+            else:  # return_type == "score"
+                result = get_alignment(
+                    returned_unit, dictionary_of_values, exactness, distance_bound, flex
+                )
+                if flex:
+                    flex_scoring(returned_unit, result, finer_flag, batch_start, i, exactness, distance_bound, path_to_incorrect_index_file, distributed, compare_type)
+                else:
+                    normal_scoring(returned_unit, result, finer_flag, batch_start, i)
+                # continue #TODO: Uncomment this to skip appending to results if only score is needed
+            
+            
+            results.append(result)
+    
+    if return_type == "score":
+        lower_bound, upper_bound = score_alignment(np.sum(finer_flag), num_queries)
+        return finer_flag[:num_queries, 0], lower_bound, upper_bound, results
+    return results
 
 def main_align(
     store,
@@ -296,9 +575,6 @@ def main_align(
 
     path_to_incorrect_index_file = (
         "/home/shreyas/NLP/dna2vec/evaluate/test_cache/logs" + "incorrect_index.jsonl"
-    )
-    path_to_incorrect_align_file = (
-        "/home/shreyas/NLP/dna2vec/evaluate/test_cache/logs" + "incorrect_align.jsonl"
     )
 
     if not distributed:
@@ -337,6 +613,8 @@ def main_align(
                     distance_to_index,
                     index_to_distance,
                     sw_original,
+                    trained_positions,
+                    all_candidate_strings,
                     timer,
                 ) = bwamem_align_parallel(
                     all_candidate_strings,
@@ -479,59 +757,15 @@ def main_align(
                     original_sequence = dictionary_of_values[returned_unit["query"]]
                 else:
                     original_sequence = None
-
-                # Attempt at getting rid of SW distance computation
-                # candidate_subsequence, candidate_score, candidate_edit_dist = (
-                #     get_sw_less_matching(
-                #         all_candidate_strings, returned_unit["query"], model=store.model
-                #     )
-                # )
-
-                # edit_distance_og_subs = levenshtein_distance(
-                #         original_sequence, candidate_subsequence
-                #     )
-
-                # # print("Original Read is {}".format(original_sequence))
-                # # print("Read used is {}".format(returned_unit["query"]))
-                # # print("Candidate fragment is {}".format(candidate_subsequence))
-
-                # if candidate_edit_dist == 0 or edit_distance_og_subs == 0:
-                #     print("MATCH FOUND")
-                #     print("Edit distance is {}".format(candidate_edit_dist))
-                #     finer_flag[batch_start + i, 0] = 1
-
-                # else:
-
-                #     finer_flag[batch_start + i, 0] = 0
-                #     edit_distance_og_read = levenshtein_distance(
-                #         original_sequence, returned_unit["query"]
-                #     )
-
-                #     print(
-                #         "Edit distance between original read and read is {}".format(
-                #             edit_distance_og_read
-                #         )
-                #     )
-                #     print(
-                #         "Edit distance between original read and candidate fragment is {}".format(
-                #             edit_distance_og_subs
-                #         )
-                #     )
-                #     print("Original Read is {}".format(original_sequence))
-                #     print("Read used is {}".format(returned_unit["query"]))
-                #     print("Candidate fragment is {}".format(candidate_subsequence))
-
-                #     # print("HAVE NOT FOUND AN EXACT MATCH")
-
-                # continue
-
-                # This step computes the SW distance, question is can we do away with this?
+                    
                 (
                     fragment_distances,
                     fragment_indices,
                     distance_to_index,
                     index_to_distance,
                     sw_original,
+                    trained_positions,
+                    all_candidate_strings,
                     timer,
                 ) = bwamem_align_parallel(
                     all_candidate_strings,
@@ -600,13 +834,6 @@ def main_align(
                     else:
                         finer_flag[batch_start + i, 0] = 0
 
-                # if dictionary_of_values is not None:
-                #     dictionary_of_values[returned_unit["query"]].append(
-                #         bool(finer_flag[batch_start + i, 0])
-                #     )
-
-        # if dictionary_of_values is not None:
-        #     return [finer_flag[:num_queries, 0], dictionary_of_values]
 
         successes = np.sum(finer_flag)
         lower_bound, upper_bound = clopper_pearson_interval(successes, num_queries)
@@ -631,7 +858,7 @@ def read_fasta_chromosomes(file_path):
     with open(file_path, "r") as file:
         header = None
         sequence = ""
-        for line in file:
+        for line in tqdm(file):
             line = line.strip()
             if not line:
                 continue  # Skip empty lines
@@ -655,6 +882,8 @@ def read_fasta_chromosomes(file_path):
                 sequence += line
         # Yield the last chromosome entry in the file
         if header is not None:
+            if not os.path.exists("test_cache/logs"):
+                os.makedirs("test_cache/logs")
             with open("test_cache/logs/headers", "a+") as f:
                 f.write(header)
                 f.write("\n")
@@ -682,9 +911,9 @@ def is_within_score_bound(
     for dist in read_sw_distances:
         if sw_original is not None:
             if dist - sw_original <= score_bound:
-                return True
+                return True , dist
 
-    return False
+    return False, None #TODO: Change this to return the distance
 
 
 def initialize_pinecone(
@@ -698,32 +927,52 @@ def initialize_pinecone(
 
     Outputs: Yields a PineconeStore object, data_alias and config.
     """
-
-    import torch
-
+    
     for alias in checkpoint_queue:
-
-        # Check if provided alias is in the models trained and not baseline.
-        if alias in configs["checkpoints"] and configs["checkpoints"][alias] != "Baseline":
-            received = torch.load(configs["checkpoints"][alias], map_location="cpu")
-            config = received["config"]
-            config.model_config.tokenizer_path = configs["checkpoints"]["tokenizer"]
-            encoder, pooling, tokenizer = model_from_config(config.model_config)
-            encoder.load_state_dict(received["model"])
-            encoder.eval()
+        
+        if alias == "huggingface":
+            print("Huggingface Model")
+            print("______________________")
+            model, tokenizer, pooling = load_hf_model()
             model_params = {
                 "tokenizer": tokenizer,
-                "model": encoder,
+                "model": model,
                 "pooling": pooling,
             }
             baseline = False
             baseline_name = None
+            hf_model = True
+            hf_model_name = alias
+        else:
+            # Check if provided alias is in the models trained and not baseline.
+            if alias in configs["checkpoints"] and configs["checkpoints"][alias] != "Baseline":
+                print(f"{alias} Model")
+                print("______________________")
+                received = torch.load(configs["checkpoints"][alias], map_location="cpu")
+                config = received["config"]
+                model_config = config.model_config.model_dump()
+                model_config["tokenizer_path"] = configs["checkpoints"]["tokenizer"]
+                model_config = ModelConfigSchema(**model_config)
+                encoder, pooling, tokenizer = model_from_config(model_config)
+                encoder.load_state_dict(received["model"])
+                encoder.eval()
+                model_params = {
+                    "tokenizer": tokenizer,
+                    "model": encoder,
+                    "pooling": pooling,
+                }
+                baseline = False
+                baseline_name = None
+                hf_model = False
+                hf_model_name = None
 
-        # Check if model is baseline
-        elif alias in configs["checkpoints"] and configs["checkpoints"][alias] == "Baseline":
-            model_params = None
-            baseline = True
-            baseline_name = alias
+            # Check if model is baseline
+            elif alias in configs["checkpoints"] and configs["checkpoints"][alias] == "Baseline":
+                model_params = None
+                baseline = True
+                baseline_name = alias
+                hf_model = False
+                hf_model_name = None
 
         for data_alias in data_queue:
             config = str("config-" + alias + "-" + data_alias).lower()
@@ -736,9 +985,10 @@ def initialize_pinecone(
                 model_params=model_params,
                 baseline_name=baseline_name,
                 baseline=baseline,
+                hf_model=hf_model,
+                hf_model_name=hf_model_name,
                 pod_type=pod_type,
             )
-
             yield store, data_alias, config
 
 
@@ -877,3 +1127,48 @@ def pick_from_chromosome3(path, samples, per_window=1000):
             random_lines.append((sample_subsequence(full_sequence), str(random_index)))
 
     return random_lines
+
+
+def calculate_SW_and_Cosine_similarity(
+    read: str,
+    fragment: str,
+):
+    """
+    Calculate Smith-Waterman similarity and cosine similarity between a read and a fragment.
+    """
+    def load_hf_model():
+        hf_model = AutoModel.from_pretrained("roychowdhuryresearch/dna2vec", trust_remote_code=True)
+        hf_tokenizer = AutoTokenizer.from_pretrained("roychowdhuryresearch/dna2vec", trust_remote_code=True)
+
+        class AveragePooler(nn.Module):
+            """
+            Parameter-free poolers to get the sentence embedding
+            # derived from https://github.com/princeton-nlp/SimCSE/blob/13361d0e29da1691e313a94f003e2ed1cfa97fef/simcse/models.py#LL49C1-L84C1
+            """
+
+            def __init__(self):
+                super().__init__()
+
+            def forward(self, last_hidden, attention_mask):
+                # Old previous implementation
+                return (last_hidden * attention_mask.unsqueeze(-1)).sum(1) / attention_mask.sum(
+                    -1
+                ).unsqueeze(-1)
+
+        hf_model.pooler = AveragePooler()
+        return hf_model, hf_tokenizer, hf_model.pooler
+    
+    hf_model, hf_tokenizer, hf_model.pooler = load_hf_model()
+    
+    # Calculate Smith-Waterman similarity
+    sw_score = calculate_smith_waterman_distance(read, fragment)[["distance"]]
+    begins = calculate_smith_waterman_distance(read, fragment)[["begins"]]
+
+    # Calculate cosine similarity of the embeddings
+    read_embedding = hf_model.pooler(hf_model(**hf_tokenizer(read, return_tensors="pt")), hf_tokenizer(read, return_tensors="pt").attention_mask)
+    fragment_embedding = hf_model.pooler(hf_model(**hf_tokenizer(fragment, return_tensors="pt")), hf_tokenizer(fragment, return_tensors="pt").attention_mask)
+    cosine_score = torch.nn.functional.cosine_similarity(read_embedding, fragment_embedding).item()
+
+    return sw_score, begins, cosine_score
+    
+    

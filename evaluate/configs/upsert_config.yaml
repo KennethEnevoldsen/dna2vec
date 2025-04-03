@@ -1,0 +1,16 @@
+defaults:
+  - defaults/upsert_config_defaults.yaml
+  - _self_
+
+# set your own parameters here
+vector_db: ["ch2-hs37d5"]
+model: ["huggingface"]
+device: "cuda:0"
+add_namespace: true
+no_namespace: false
+recipes: ["ch2-hs37d5"]
+pod_type: "s1.x4"
+checkpoints : ["huggingface"]
+data_recipes:
+  ch2-hs37d5:
+    - /mnt/SSD1/yigit/dna_data/chromosome_2/floodfill_ch2-hs37d5.txt
