@@ -9,8 +9,8 @@ def calculate_smith_waterman_distance(
     string2,
     match_score=2,  # do not change
     mismatch_penalty=-1,
-    open_gap_penalty=-0.5,
-    continue_gap_penalty=-0.1,
+    open_gap_penalty=-0.5, #TODO: change it to -1.5
+    continue_gap_penalty=-0.1, #TODO: change it to -0.5
     debug=False,
 ):
     start = time.time()
@@ -62,6 +62,8 @@ def calculate_smith_waterman_distance(
         "elapsed time": time.time() - start,
         "distance": smith_waterman_distance,
         "begins": list(set(begins)),
+        "alignment_str": alignment.__str__(),
+        "alignment_indices": alignment.aligned
     }
 
 
@@ -82,7 +84,7 @@ def bwamem_align(
         all_candidate_strings, trained_positions, metadata_set
     ):
 
-        returned_object = calculate_smith_waterman_distance(long_string, substring)
+        returned_object = calculate_smith_waterman_distance(long_string,substring)
         total_time += returned_object["elapsed time"]
 
         for starting_sub_index in returned_object["begins"]:
@@ -118,7 +120,14 @@ def bwamem_align(
 
 def process_single_string(args: tuple):
     retrieved_fragment, read, train_pos, metadata = args
-    returned_object = calculate_smith_waterman_distance(retrieved_fragment, read)
+    returned_object = calculate_smith_waterman_distance(retrieved_fragment, 
+                                                        read,
+                                                        match_score=2,  # Keep as specified
+                                                        mismatch_penalty=-1,  # Standard for nucleotide mismatches
+                                                        open_gap_penalty=-2.5,  # Higher penalty for reference sequence (string1)
+                                                        continue_gap_penalty=-0.02,  # Very low extension penalty for insertions
+                                                        debug=False)
+    # returned_object = calculate_smith_waterman_distance(retrieved_fragment, read)
     return (
         returned_object["distance"],
         returned_object["begins"],
@@ -127,6 +136,8 @@ def process_single_string(args: tuple):
         returned_object["elapsed time"],
         retrieved_fragment,
         read,
+        returned_object["alignment_str"],
+        returned_object["alignment_indices"]
     )
 
 
@@ -156,10 +167,10 @@ def bwamem_align_parallel(
             )
         )
 
-    for distance, begins, train_pos, metadata, _, fragment, read in results:
+    for distance, begins, train_pos, metadata, _, fragment, read, alignment_str,alignment_indices in results:
         for starting_sub_index in begins:
             refined_results[distance].append(
-                (starting_sub_index, train_pos, metadata, fragment, read)
+                (starting_sub_index, train_pos, metadata, fragment, read, alignment_str,alignment_indices)
             )
 
     try:
@@ -202,12 +213,22 @@ def bwamem_align_parallel(
     indices = set()
     index_to_trained_positions = dict()
     index_to_distance = dict()
+    index_to_alignment_str = dict()
+    index_to_alignment_indices = dict()
     for distance in refined_results:
         distances.add(distance)
         for term in refined_results[distance]:
-            indices.add(int(term[0]) + int(term[1]))
-            index_to_distance[int(term[0]) + int(term[1])] = (distance, term[-2])
-            index_to_trained_positions[int(term[0]) + int(term[1])] = int(term[1])
+            index = int(term[0]) + int(term[1])
+            if index in indices:
+                if index_to_distance[index][0] < distance:
+                    continue
+            else:
+                indices.add(index)
+            
+            index_to_distance[index] = (distance, term[-4])
+            index_to_trained_positions[index] = int(term[1])
+            index_to_alignment_str[index] = term[-2]
+            index_to_alignment_indices[index] = term[-1]
             # dist_meta[distances].append(meta)
 
     # Compute SW distance between subsequence and original read
@@ -245,7 +266,8 @@ def bwamem_align_parallel(
         index_to_distance,
         orig_distance,
         index_to_trained_positions,
-        all_candidate_strings,
+        index_to_alignment_str,
+        index_to_alignment_indices,
         time.time() - total_time,
     )
 

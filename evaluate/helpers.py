@@ -1,7 +1,6 @@
 # Standard library imports
 import random
 from typing import List, Tuple
-
 # Third-party imports
 import jsonlines
 import numpy as np
@@ -11,6 +10,8 @@ import yaml
 from Levenshtein import distance as levenshtein_distance
 from tqdm import tqdm
 import scipy.stats as stats
+import pandas as pd
+import os
 # Local imports
 from aligners.smith_waterman import bwamem_align_parallel, calculate_smith_waterman_distance
 from dna2vec.model import model_from_config
@@ -22,10 +23,11 @@ import torch.nn as nn
 
 
 # Define the configuration files
+file_dir = os.path.dirname(os.path.abspath(__file__))
 config_files = {
-    "data_recipes": "/home/yigit/codebase/dna2vec/evaluate/configs/data_recipes.yaml",
-    "checkpoints": "/home/yigit/codebase/dna2vec/evaluate/configs/model_checkpoints.yaml",
-    "raw_fasta_files": "/home/yigit/codebase/dna2vec/evaluate/configs/raw.yaml"
+    "data_recipes": f"{file_dir}/configs/data_recipes.yaml",
+    "checkpoints": f"{file_dir}/configs/model_checkpoints.yaml",
+    "raw_fasta_files": f"{file_dir}/configs/raw.yaml"
 }
 
 def load_yaml_config(file_path):
@@ -65,6 +67,347 @@ def load_hf_model():
     hf_model.pooler = AveragePooler()
     return hf_model, hf_tokenizer, hf_model.pooler
 
+def generate_cigar_string(aligned_indices, query_length=None):
+    """
+    Generate CIGAR string from alignment indices returned by BioPython's PairwiseAlign 
+    with Smith-Waterman algorithm, including soft clipping.
+    
+    Args:
+        aligned_indices: A numpy array containing two arrays of start/end indices:
+                        [[(t_start1, t_end1), ...], [(q_start1, q_end1), ...]]
+                        where t refers to target and q refers to query sequence indices.
+        query_length: Optional; the total length of the query sequence for soft clipping.
+                     If not provided, soft clips will only be added if clearly needed.
+    
+    Returns:
+        A CIGAR string representing the alignment (e.g., "3S5M2I3M1D7M4S")
+    """
+    if not isinstance(aligned_indices, np.ndarray) or len(aligned_indices) != 2:
+        print("Warning: Input must be an array of two arrays.")
+        return "*"
+    
+    target_indices, query_indices = aligned_indices
+    
+    if len(target_indices) != len(query_indices):
+        raise ValueError("Target and query must have the same number of aligned segments")
+    
+    if len(target_indices) == 0:
+        return "*"  # Return unaligned marker if no alignments
+    
+    cigar = []
+    
+    # Add soft clip at the beginning if the alignment doesn't start at the beginning of the query
+    if query_indices[0][0] > 0:
+        cigar.append(f"{query_indices[0][0]}S")
+    
+    last_t_end = None
+    last_q_end = None
+    
+    for i in range(len(target_indices)):
+        t_start, t_end = target_indices[i]
+        q_start, q_end = query_indices[i]
+        
+        # Handle gaps between aligned segments
+        if last_t_end is not None and last_q_end is not None:
+            t_gap = t_start - last_t_end
+            q_gap = q_start - last_q_end
+            
+            # Add deletion (gap in query)
+            if t_gap > q_gap:
+                del_size = t_gap - q_gap
+                cigar.append(f"{del_size}D")
+            
+            # Add insertion (gap in target)
+            elif q_gap > t_gap:
+                ins_size = q_gap - t_gap
+                cigar.append(f"{ins_size}I")
+        
+        # Add current match
+        match_length = min(t_end - t_start, q_end - q_start)
+        if match_length > 0:
+            cigar.append(f"{match_length}M")
+        
+        last_t_end = t_end
+        last_q_end = q_end
+    
+    # Add soft clip at the end if the alignment doesn't end at the end of the query
+    if query_length is not None and query_indices[-1][1] < query_length:
+        soft_clip_end = query_length - query_indices[-1][1]
+        if soft_clip_end > 0:
+            cigar.append(f"{soft_clip_end}S")
+    
+    return "".join(cigar)
+
+# Post-process results to check if match.start is within [index, index+1250]
+def post_process_results(results, mapped_reads, queries, topk):
+    """
+    For each dictionary in results, check if the corresponding match.read.reference_start 
+    is within [index, index+1250] for any index in the dictionary's indices field.
+    
+    Args:
+        results: List of dictionaries from query_and_align
+        mapped_reads: List of ReadAndReference objects
+        queries: List of query sequences
+        
+    Returns:
+        DataFrame with columns for read, result, reference_interval, and cigar_string
+        List of 1s and 0s indicating if the condition is met for each query
+    """
+    processed_results = []
+    df_data = []
+    
+    # Create a mapping from query sequence to mapped_read
+    query_to_read = {read.read.query_sequence: read for read in mapped_reads}
+    
+    for i, result_dict in enumerate(results):
+        query = result_dict["query"]
+        all_candidate_strings = result_dict["fragments"]
+        index_to_trained_positions = result_dict["trained_positions"]
+        indices = result_dict["indices"]
+        
+        # Get the corresponding mapped_read
+        mapped_read = query_to_read.get(query)
+        
+        if mapped_read and index_to_trained_positions:
+            # Check if reference_start is within [index, index+1250] for any index
+            read_reference_start = mapped_read.read.reference_start
+            cigar_string = mapped_read.read.cigarstring
+            
+            # Find the matching index (if any)
+            matching_trained_position = None
+            best_distance = None
+            best_fragment_distance = None
+            best_fragment = None
+            is_top_match = False
+            topk_index = None
+            is_best_frag_dist_aligns_best_sw_dist = False
+            best_fragment_start_index = None
+            best_alignment_str = None
+            is_best_frag_start_idx_eq_read_ref_start_idx = False
+            # sort trained_positions by index which is the key of the dictionary
+            index_to_trained_positions = {index: index_to_trained_positions[index] for index in indices}
+            returned_topk_data = [data for key, data in dict(result_dict["distance_to_index"]).items()][:int(topk)] 
+            returned_topk_data = [data_value[0] for data_value in returned_topk_data]
+            # sort returned_topk_data wrt all_candidate_strings, every data_value is a tuple (index,index, _, candidate_string)
+            returned_topk_data_sorted = sorted(returned_topk_data, key=lambda x: all_candidate_strings.index(x[3]))
+            candidate_rows = []
+            for enum, (index_start,trained_pos,_,candidate_string,_,alignment_str, alignment_indices) in enumerate(returned_topk_data_sorted):
+                index = index_start + int(trained_pos)
+                if int(trained_pos) <= read_reference_start <= int(trained_pos) + 1300:
+                    matching_trained_position = int(trained_pos)
+                    is_top_match = True if enum == 0 else False
+                    # find the index of the index in the sorted index_to_distance wrt distance
+                    topk_index = enum
+                    best_fragment = candidate_string
+                    best_distance = min(result_dict["distances"])
+                    sorted_best_three_distances = sorted(result_dict["distances"])[:3]
+                    sorted_best_three_alignment_str = [result_dict["distance_to_index"][distance][0][-2] for distance in sorted_best_three_distances]
+                    sorted_best_three_alignment_indices = [result_dict["distance_to_index"][distance][0][-1] for distance in sorted_best_three_distances]
+                    sorted_best_three_alignment_cigar_strings = [generate_cigar_string(alignment_indices) for alignment_indices in sorted_best_three_alignment_indices]
+                    sorted_best_three_alignment_start_indices = [result_dict["distance_to_index"][distance][0][0] + int(result_dict["distance_to_index"][distance][0][1]) for distance in sorted_best_three_distances]
+                    sorted_alignment_integrity = [calculate_alignment_integrity(alignment_indices) for alignment_indices in sorted_best_three_alignment_indices]
+                    best_fragment_distance = result_dict["index_to_distance"][index][0]
+                    best_fragment_cigar_string = generate_cigar_string(result_dict["distance_to_index"][best_fragment_distance][0][-1])
+                    best_alignment_str = alignment_str
+                    is_best_frag_dist_aligns_best_sw_dist = True if best_fragment_distance == best_distance else False
+                    # if not is_best_frag_dist_aligns_best_sw_dist:
+                    #     breakpoint()
+                    #     print("-"*100)
+                    #     print("Structural Integrity claims that the best alignment has lots of fragmentation, we are checking the best alignment again")
+                    #     print(sorted_alignment_integrity)
+                    #     print(sorted_best_three_distances)
+                    #     print("-"*100)
+                    #     max_idx_sorted_alignment_integrity = np.argmax(sorted_alignment_integrity)
+                    #     print(max_idx_sorted_alignment_integrity)
+                    best_fragment_start_index = index
+                    is_best_frag_start_idx_eq_read_ref_start_idx = True if best_fragment_start_index == read_reference_start else False
+                    reference_interval = f"[{matching_trained_position}, {matching_trained_position + 1300}]" if matching_trained_position is not None else "No match"
+                    candidate_rows.append({
+                        "enum": i,
+                        "read": query,  # Read sequence
+                        "read_reference_start_index": read_reference_start,  # Index where the read starts in the reference
+                        "cigar_string": cigar_string,  # CIGAR string
+                        "reference_interval": reference_interval,  # Reference interval
+                        "is_exists_in_topk_fragments": 1,  # Is the read in the topk fragments
+                        
+                        # TopK match information
+                        "topk_index": topk_index,  # Index of the topk match
+                        "is_top_match": is_top_match,  # Is top match in topk
+                        
+                        # Fragment information
+                        "best_fragment": best_fragment,  # Best fragment w.r.t position
+                        "best_fragment_start_index": best_fragment_start_index,  # Index of the best fragment
+                        
+                        # Distance metrics
+                        "best_distance_in_topk": best_distance,  # Best distance in topk
+                        "best_fragment_distance": best_fragment_distance,  # Distance of the best fragment w.r.t position
+                        "is_best_frag_dist_aligns_best_sw_dist": is_best_frag_dist_aligns_best_sw_dist,  # Is the best fragment distance aligns with the best sw distance
+                        "is_best_fragment_start_index_equal_to_index": is_best_frag_start_idx_eq_read_ref_start_idx,  # Is the best fragment start index equals to the read reference start index
+                        
+                        # Alignment string
+                        "alignment_str": best_alignment_str,  # Best alignment string
+                        "second_alignment_str": sorted_best_three_alignment_str[1],
+                        "third_alignment_str": sorted_best_three_alignment_str[2],
+                        "alignment_cigar_string": best_fragment_cigar_string,
+                        "second_alignment_cigar_string": sorted_best_three_alignment_cigar_strings[1],
+                        "third_alignment_cigar_string": sorted_best_three_alignment_cigar_strings[2],
+                        
+                        "gt_alignment_str": format_alignment(mapped_read.reference, query, read_reference_start-int(trained_pos), cigar_string) if is_best_frag_dist_aligns_best_sw_dist else None,
+                    })
+            # Set result to 1 if there's a matching index, 0 otherwise
+            result = 1 if len(candidate_rows) > 0 else 0
+            processed_results.append(result)
+            
+            # Determine reference interval
+            reference_interval = f"[{matching_trained_position}, {matching_trained_position + 1300}]" if matching_trained_position is not None else "No match"
+            if len(candidate_rows) > 0:
+                best_row_based_on_distance = min(candidate_rows, key=lambda x: x["best_fragment_distance"])
+                df_data.append(best_row_based_on_distance)
+                
+            else:
+                df_data.append({
+                        "enum": i,
+                        "read": query,
+                        "read_reference_start_index": read_reference_start,  # Index where the read starts in the reference
+                        "cigar_string": "N/A" if not mapped_read else mapped_read.read.cigarstring,
+                        "reference_interval": "No match",
+                        "is_exists_in_topk_fragments": 0,  # Is the read in the topk fragments"
+                    })
+        else:
+            processed_results.append(0)
+            # Add row to dataframe data for reads with no matches
+            df_data.append({
+                "enum": enum,
+                "read": query,
+                "result": 0,
+                "reference_start": "N/A",
+                "reference_interval": "No match",
+                "cigar_string": "N/A" if not mapped_read else mapped_read.read.cigarstring
+            })
+    
+    # Create dataframe
+    results_df = pd.DataFrame(df_data)
+    
+    return processed_results, results_df
+
+def sv_results_refiner(results_path):
+    eval_results = pd.read_csv(results_path)
+    new_column_names = ["enum",
+                    "read_gt", 
+                    "read_gt_idx", 
+                    "read_gt_cigar_str", 
+                    "read/frag_gt_reference_interval", 
+                    "is_read_gt_index_exist_in_top75", 
+                    "read/frag_gt_top75_index", 
+                    "is_read/frag_gt_top_match_in_top75", 
+                    "read/frag_gt", 
+                    "read/frag_gt_idx", 
+                    "best_sw_score_in_top75", 
+                    "read/frag_gt_best_sw_score",
+                    "is_read/frag_gt_sw_score_best_in_top75",
+                    "is_read/frag_gt_index_same_as_gt_index",
+                    "alignment_str",
+                    "second_best_alignment_str",
+                    "third_best_alignment_str",
+                    "alignment_cigar_str",
+                    "second_best_alignment_cigar_str",
+                    "third_best_alignment_cigar_str",
+                    "read/frag_gt_alignment_str"]
+    
+    for idx, name in enumerate(new_column_names):
+        eval_results.rename(columns={eval_results.columns[idx]: name}, inplace=True)
+        
+    eval_results["is_read_gt_index_exist_in_top75"] = eval_results["is_read_gt_index_exist_in_top75"].astype(bool)
+    eval_results.loc[eval_results["is_read_gt_index_exist_in_top75"] == False, 
+                 [
+                 "read/frag_gt_top75_index", 
+                 "is_read/frag_gt_top_match_in_top75", 
+                 "read/frag_gt", 
+                 "read/frag_gt_idx", 
+                 "best_sw_score_in_top75", 
+                 "read/frag_gt_best_sw_score",
+                 "is_read/frag_gt_sw_score_best_in_top75",
+                 "is_read/frag_gt_index_same_as_gt_index"]] = None
+    
+    eval_results["is_read/frag_gt_index_same_as_gt_index"] = None
+    eval_results["is_read/frag_gt_index_same_as_gt_index"] = eval_results[eval_results["is_read/frag_gt_sw_score_best_in_top75"] == True].apply(lambda row: row["read_gt_idx"] == row["read/frag_gt_idx"], axis=1)
+    eval_results["read_gt_idx_diff_from_read/frag_gt_index"] = eval_results["read_gt_idx"] - eval_results["read/frag_gt_idx"]
+    
+    return eval_results
+
+def calculate_alignment_integrity(aligned_indices):
+    """
+    Calculates a structural integrity score for a pairwise alignment based on
+    its aligned segment indices.
+
+    The score favors alignments that are less fragmented (fewer chunks)
+    and where the aligned portions densely cover the span of the alignment.
+    Higher scores indicate better structural integrity. A score of ~2.0
+    represents a single, perfect block alignment. Scores decrease as
+    fragmentation increases or density decreases.
+
+    Args:
+        aligned_indices: A tuple containing two tuples of (start, end) indices
+                         for target and query sequences, respectively, as
+                         returned by Biopython's alignment.aligned property.
+                         Format: (((t_start1, t_end1), ...), ((q_start1, q_end1), ...))
+
+    Returns:
+        A float score representing the structural integrity (higher is better),
+        or 0.0 if the input is invalid or represents an empty alignment.
+
+    Raises:
+        ValueError: If the number of target chunks and query chunks differ.
+    """
+    # --- Input Validation ---
+    if not isinstance(aligned_indices, np.ndarray) or len(aligned_indices) != 2:
+        print("Warning: Input must be a tuple of two arrays.")
+        return 0.0
+    if not isinstance(aligned_indices[0], np.ndarray) or not isinstance(aligned_indices[1], np.ndarray):
+         print("Warning: Input must be a tuple of two arrays.")
+         return 0.0
+
+    target_chunks = aligned_indices[0]
+    query_chunks = aligned_indices[1]
+
+    if len(target_chunks) != len(query_chunks):
+        raise ValueError("Target and query chunk lists must have the same length.")
+
+    N = len(target_chunks)
+    if N == 0:
+        return 0.0 # No alignment chunks, zero integrity
+
+    # --- Calculate Total Aligned Length ---
+    # Ensure start <= end and calculate length, summing across chunks
+    total_target_aligned = sum(max(0, t_end - t_start) for t_start, t_end in target_chunks)
+    total_query_aligned = sum(max(0, q_end - q_start) for q_start, q_end in query_chunks)
+
+    # If total aligned length is zero, integrity is zero
+    if total_target_aligned == 0 or total_query_aligned == 0:
+        return 0.0
+
+    # --- Calculate Alignment Span ---
+    # Span is from the start of the first chunk to the end of the last chunk
+    target_span_start = target_chunks[0][0]
+    target_span_end = target_chunks[-1][1]
+    query_span_start = query_chunks[0][0]
+    query_span_end = query_chunks[-1][1]
+
+    # Calculate span length, ensuring it's at least 1 to avoid division by zero
+    target_span_length = max(1, target_span_end - target_span_start)
+    query_span_length = max(1, query_span_end - query_span_start)
+
+    # --- Calculate Alignment Density ---
+    # Density = total aligned length within the span / length of the span
+    target_density = total_target_aligned / target_span_length
+    query_density = total_query_aligned / query_span_length
+
+    # --- Calculate Final Integrity Score ---
+    # Score = Sum of densities penalized by the number of chunks (N)
+    # We divide by max(1, N) so N=1 isn't penalized, but N>1 is.
+    integrity_score = (target_density + query_density) / max(1, N)
+
+    return integrity_score
 
 def clopper_pearson_interval(successes, trials, confidence_level=0.95):
     """
@@ -246,7 +589,8 @@ def align_real_reads(
                 _,
                 sw_original,
                 trained_positions,
-                all_candidate_strings,
+                index_to_alignment_str,
+                index_to_alignment_indices,
                 _
             ) = bwamem_align_parallel(
                 all_candidate_strings,
@@ -312,7 +656,8 @@ def get_alignment(
         index_to_distance,
         sw_original,
         trained_positions,
-        all_candidate_strings,
+        index_to_alignment_str,
+        index_to_alignment_indices,
         _,
     ) = bwamem_align_parallel(
         all_candidate_strings,
@@ -332,6 +677,7 @@ def get_alignment(
         "distance_to_index": distance_to_index,
         "index_to_distance": index_to_distance,
         "trained_positions": trained_positions,
+        "index_to_alignment_str": index_to_alignment_str,
     }
 
 def get_best_alignment(
@@ -352,8 +698,9 @@ def get_best_alignment(
         index_to_distance,
         sw_original,
         trained_positions,
-        all_candidate_strings,
-        _,
+        index_to_alignment_str,
+        index_to_alignment_indices,
+        _
     ) = bwamem_align_parallel(
         all_candidate_strings,
         trained_positions,
@@ -376,6 +723,7 @@ def get_best_alignment(
         "sw_original": sw_original,
         "distance_to_index": distance_to_index,
         "index_to_distance": index_to_distance,
+        "index_to_alignment_str": index_to_alignment_str,
     }
 
 def log_mismatch(
@@ -496,7 +844,8 @@ def query_and_align(
     compare_type="both"
 ):
     """Main function to align queries with stored sequences and return best alignments, all alignments, or just score."""
-    path_to_incorrect_index_file = "/home/yigit/codebase/dna2vec/evaluate/test_cache/logs/incorrect_index.jsonl"
+    work_dir = os.getcwd()
+    path_to_incorrect_index_file = f"{work_dir}/evaluate/test_cache/logs/incorrect_index.jsonl"
     num_queries = len(queries)
     results = []
     finer_flag = np.zeros((num_queries, 1))
@@ -614,7 +963,8 @@ def main_align(
                     index_to_distance,
                     sw_original,
                     trained_positions,
-                    all_candidate_strings,
+                    index_to_alignment_str,
+                    index_to_alignment_indices,
                     timer,
                 ) = bwamem_align_parallel(
                     all_candidate_strings,
@@ -765,7 +1115,8 @@ def main_align(
                     index_to_distance,
                     sw_original,
                     trained_positions,
-                    all_candidate_strings,
+                    index_to_alignment_str,
+                    index_to_alignment_indices,
                     timer,
                 ) = bwamem_align_parallel(
                     all_candidate_strings,
@@ -1170,5 +1521,173 @@ def calculate_SW_and_Cosine_similarity(
     cosine_score = torch.nn.functional.cosine_similarity(read_embedding, fragment_embedding).item()
 
     return sw_score, begins, cosine_score
+    
+    
+
+def format_alignment(target_seq, query_seq, target_start, cigar_string=None, alignment_indices=None, line_width=60):
+    """
+    Format the alignment between target and query sequences based on CIGAR string or alignment indices.
+    
+    Args:
+        target_seq: The raw target/reference sequence (without gaps)
+        query_seq: The raw query sequence (without gaps)
+        target_start: The starting position of the target sequence in the reference
+        cigar_string: Optional; the CIGAR string representing the alignment
+        alignment_indices: Optional; tuple of target and query alignment indices
+        line_width: Width of each line in the alignment display (default: 60)
+        
+    Returns:
+        A formatted string showing the alignment
+    """
+    # First, insert gaps in the sequences according to alignment information
+    if cigar_string is not None:
+        gapped_target, gapped_query, match_line = process_cigar(target_seq, query_seq, cigar_string)
+    elif alignment_indices is not None:
+        gapped_target, gapped_query, match_line = process_alignment_indices(target_seq, query_seq, alignment_indices)
+    else:
+        raise ValueError("Either cigar_string or alignment_indices must be provided")
+    
+    # Format the alignment in blocks
+    result = []
+    target_pos = target_start
+    query_pos = 0
+    
+    for i in range(0, len(gapped_target), line_width):
+        block_target = gapped_target[i:i+line_width]
+        block_match = match_line[i:i+line_width]
+        block_query = gapped_query[i:i+line_width]
+        
+        # Calculate displayed positions
+        target_displayed_chars = sum(1 for c in block_target if c != '-')
+        query_displayed_chars = sum(1 for c in block_query if c != '-')
+        
+        # Use consistent padding for better alignment
+        result.append(f"target {target_pos:10d} {block_target}")
+        result.append(f"       {i:10d} {block_match}")
+        result.append(f"query  {query_pos:10d} {block_query}")
+        result.append("")
+        
+        # Update positions for next block
+        target_pos += target_displayed_chars
+        query_pos += query_displayed_chars
+    
+    return "\n".join(result)
+
+def process_cigar(target_seq, query_seq, cigar_string):
+    """Process CIGAR string to insert gaps in sequences and create match line."""
+    import re
+    
+    cigar_ops = re.findall(r'(\d+)([MIDNSHP=X])', cigar_string)
+    
+    gapped_target = []
+    gapped_query = []
+    match_line = []
+    
+    t_idx = q_idx = 0
+    
+    for length, op in cigar_ops:
+        length = int(length)
+        
+        if op == 'M':  # Match or mismatch
+            for i in range(length):
+                if t_idx < len(target_seq) and q_idx < len(query_seq):
+                    gapped_target.append(target_seq[t_idx])
+                    gapped_query.append(query_seq[q_idx])
+                    match_line.append('|' if target_seq[t_idx] == query_seq[q_idx] else '.')
+                    t_idx += 1
+                    q_idx += 1
+        elif op == 'I':  # Insertion in query
+            for i in range(length):
+                if q_idx < len(query_seq):
+                    gapped_target.append('-')
+                    gapped_query.append(query_seq[q_idx])
+                    match_line.append('-')
+                    q_idx += 1
+        elif op == 'D':  # Deletion in query
+            for i in range(length):
+                if t_idx < len(target_seq):
+                    gapped_target.append(target_seq[t_idx])
+                    gapped_query.append('-')
+                    match_line.append('-')
+                    t_idx += 1
+        elif op == 'S':  # Soft clipping
+            for i in range(length):
+                if q_idx < len(query_seq):
+                    # Soft clips are in query but not aligned to target
+                    gapped_target.append('-')
+                    gapped_query.append(query_seq[q_idx])
+                    match_line.append(' ')
+                    q_idx += 1
+    
+    return ''.join(gapped_target), ''.join(gapped_query), ''.join(match_line)
+
+def process_alignment_indices(target_seq, query_seq, alignment_indices):
+    """Process alignment indices to insert gaps in sequences and create match line."""
+    target_indices, query_indices = alignment_indices
+    
+    # Create arrays to track which positions are aligned
+    target_aligned = [False] * len(target_seq)
+    query_aligned = [False] * len(query_seq)
+    
+    # Mark aligned positions
+    for i in range(len(target_indices)):
+        t_start, t_end = target_indices[i]
+        q_start, q_end = query_indices[i]
+        
+        for j in range(min(t_end - t_start, q_end - q_start)):
+            target_aligned[t_start + j] = True
+            query_aligned[q_start + j] = True
+    
+    # Build gapped sequences
+    gapped_target = []
+    gapped_query = []
+    match_line = []
+    
+    t_idx = q_idx = 0
+    
+    # Process soft clips at the beginning
+    if not query_aligned[0] and len(query_indices) > 0 and query_indices[0][0] > 0:
+        for i in range(query_indices[0][0]):
+            gapped_target.append('-')
+            gapped_query.append(query_seq[i])
+            match_line.append('.')
+            q_idx = query_indices[0][0]
+    
+    # Process aligned regions and gaps between them
+    for i in range(len(target_indices)):
+        t_start, t_end = target_indices[i]
+        q_start, q_end = query_indices[i]
+        
+        # Add any gap between last chunk and this one
+        if i > 0:
+            last_t_end = target_indices[i-1][1]
+            last_q_end = query_indices[i-1][1]
+            
+            # Add unaligned target sequence (deletion)
+            for j in range(last_t_end, t_start):
+                gapped_target.append(target_seq[j])
+                gapped_query.append('-')
+                match_line.append('.')
+                
+            # Add unaligned query sequence (insertion)
+            for j in range(last_q_end, q_start):
+                gapped_target.append('-')
+                gapped_query.append(query_seq[j])
+                match_line.append('.')
+        
+        # Add the aligned chunk
+        for j in range(min(t_end - t_start, q_end - q_start)):
+            gapped_target.append(target_seq[t_start + j])
+            gapped_query.append(query_seq[q_start + j])
+            match_line.append('|' if target_seq[t_start + j] == query_seq[q_start + j] else '.')
+    
+    # Process soft clips at the end
+    if len(query_indices) > 0 and query_indices[-1][1] < len(query_seq):
+        for i in range(query_indices[-1][1], len(query_seq)):
+            gapped_target.append('-')
+            gapped_query.append(query_seq[i])
+            match_line.append('.')
+    
+    return ''.join(gapped_target), ''.join(gapped_query), ''.join(match_line)
     
     

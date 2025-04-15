@@ -1,57 +1,63 @@
 defaults:
   - _self_
 
+# Base configuration variables
+base_settings:
+  chromosome: "ch19"  # Set the chromosome number here
+  reference: "hs37d5"  # Set the reference genome here
+  base_path: "/home/yigit/codebase/dna2vec"  # Base path for all other paths
+  data_path: "/mnt/SSD2/dnarde"
+
+experiment_settings:
+  chr_number: 19  # Matches the chromosome set above
+  type_of_sv: "soft_clip" # "insertion", "deletion", "skipped_region", "soft_clip"
+  size_of_sv: 50 # Size of the structural variant
+  max_reads: 500 # Maximum number of reads to simulate
+
+# All settings below will derive from the chromosome and reference settings
 vector_db:
-  # - ch2-grch38  # Specify the reference chromosome used to populate the vector db
-  - ch2-hs37d5
+  - ${base_settings.chromosome}-${base_settings.reference}-1300
 
 model:
-  - huggingface  # Specify the model used to generate the embeddings
+  - huggingface  # Model used to generate embeddings
 
-num_reads: 200  # Specify the number of reads to test
+num_reads: 200  # Number of reads to test
+system: MSv3  # Sequencing system for testing
+device: cuda:0
 
-system: MSv3  # Specify the sequencing system to use for testing
-
-device: cuda:0  # Specify the device to use for testing
-
-namespace: true  # Enable namespace by default
-
-no_namespace: false  # Disable namespace if set to true
+namespace: true
+no_namespace: false
 
 reads:
-  # - ch2-grch38  # Specify which chromosome the reads are extracted from
-  - ch2-hs37d5
+  - ${base_settings.chromosome}-${base_settings.reference}  # Derived from chromosome setting
 
-compare_type: score  # Specify the type of comparison to use for testing [location, score, both]
-
-pod_type: s1.x1 # Specify the pod type to use for testing, important only if creating a new index
-
-test_mode: true  # Enable/Disable test mode
-
-return_type: score  # Specify the type of return to use for testing [best_alignment, all_alignments, score]
+compare_type: score  # Type of comparison [location, score, both]
+pod_type: s1.x1  # Pod type for testing (if creating a new index)
+test_mode: true
+return_type: score  # Return type [best_alignment, all_alignments, score]
 
 path_to_real_reads: "to be added"
 global_read_namespace_id: "to be added"
 
-
+# Paths derived from base_path
 paths:
-  dna2vec_cache_dir: "/home/yigit/codebase/dna2vec"
-  log_dir: "/home/yigit/codebase/dna2vec/Logs"
-  results_dir: "/home/yigit/codebase/dna2vec/Results"
-  # meta_headers: "/home/yigit/codebase/dna2vec/outputs/2025-02-27/13-44-34/test_cache/logs/headers"
-  # meta_headers: "/home/yigit/codebase/dna2vec/outputs/2025-03-06/02-47-04/test_cache/logs/headers"
-  meta_headers: "/home/yigit/codebase/dna2vec/outputs/2025-03-25/02-50-47/test_cache/logs/headers"
+  dna2vec_cache_dir: "${base_settings.base_path}"
+  log_dir: "${base_settings.base_path}/Logs"
+  meta_headers: "${base_settings.data_path}/${base_settings.chromosome}/headers_${base_settings.chromosome}"
+  bam_file: "${base_settings.data_path}/rde2/HG002.${base_settings.reference}.2x250.bam"
+
 grid_search:
   read_length: [250]  # ART max read length
   insertion_rate: [0.01]  # ART max insertion rate
   deletion_rate: [0.01]  # ART max deletion rate
   qq: [[60, 90]]  # Quality score ranges
-  topk: [1000]  # Number of nearest neighbors
+  topk: [75]
   distance_bound: [15]  # Score threshold
   exactness: [2]  # Index threshold
 
 configs:
-  raw_fasta_files:
-    # ch2: "/mnt/SSD1/yigit/dna_data/chromosome_2/NC_000002.fasta"
-    # ch2-grch38: "/mnt/SSD1/yigit/dna_data/chromosome_2/GCA_000001405.15_GRCh38.fasta"
-    ch2-hs37d5: "/mnt/SSD1/yigit/dna_data/chromosome_2/hs37d5.fasta"
+  raw_fasta_files: "${base_settings.data_path}/${base_settings.chromosome}/${base_settings.reference}.fasta"
+
+hydra:
+  run:
+    dir: ./outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}

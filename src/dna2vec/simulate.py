@@ -183,6 +183,11 @@ def map_reads_to_reference(
 def map_real_reads_to_reference(
     reads: List[AlignedSegment],
     reference: Optional[Path] = None,
+    vcf_path: Optional[Path] = None,
+    chr_number: int = 2,
+    type_of_sv: Literal["deletion", "insertion", "skipped_region", "soft_clip"] = "insertion",
+    size_of_sv: int = 20,
+    max_reads: int = 500,
 ) -> List[ReadAndReference]:
     """
     Map a read to a reference genome.
@@ -202,14 +207,13 @@ def map_real_reads_to_reference(
 
     # === Step 1: Load chr2 deletions from VCF ===
     deletions = []
-    vcf_path = "/home/yigit/codebase/dna2vec/human_deletions_GS_correct.vcf"
     with open(vcf_path, "r") as f:
         for line in f:
             if line.startswith("#"):
                 continue
             parts = line.strip().split("\t")
             chrom = parts[0]
-            if chrom != "2" and chrom != "chr2":  # Accept both notations
+            if chrom != str(chr_number) and chrom != "chr" + str(chr_number):  # Accept both notations
                 continue
             start = int(parts[1])
             info = dict(x.split("=") for x in parts[7].split(";") if "=" in x)
@@ -221,30 +225,33 @@ def map_real_reads_to_reference(
     print(f"Loaded {len(deletions)} deletions on chr2.")
     
     # === Step 2: Extract reads with deletions, soft clips, or skipped regions ===
-    for chrom, start, end in tqdm(deletions, desc="Processing chr2 deletions"):
+    for chrom, start, end in tqdm(deletions, desc="Processing chr19 deletions"):
         try:
-            for read in tqdm(reads.fetch(chrom, start-249, end+249), desc="Processing reads"):
+            for read in tqdm(reads.fetch(chrom, start-300, end+300), desc="Processing reads"):
                 if read.cigartuples:
-                    has_deletion = any(op == 2 and length >= 1 for op, length in read.cigartuples)  # D
-                    has_soft_clip = any(op == 4 and length >= 50 for op, length in read.cigartuples)  # S
-                    has_skipped_region = any(op == 3 and length >= 1 for op, length in read.cigartuples)  # N
-                    has_insertion = any(op == 1 and length >= 50 for op, length in read.cigartuples)  # I
+                    if type_of_sv == "deletion":
+                        has_structural_variant = any(op == 2 and length >= size_of_sv for op, length in read.cigartuples)  # D
+                    elif type_of_sv == "insertion":
+                        has_structural_variant = any(op == 1 and length >= size_of_sv for op, length in read.cigartuples)  # I
+                    elif type_of_sv == "skipped_region":
+                        has_structural_variant = any(op == 3 and length >= size_of_sv for op, length in read.cigartuples)  # N
+                    elif type_of_sv == "soft_clip":
+                        has_structural_variant = any(op == 4 and length >= size_of_sv for op, length in read.cigartuples)  # S
                     
-                    #if has_deletion or has_soft_clip or has_skipped_region or has_insertion:
-                    if has_insertion:
+                    # if has_deletion or has_soft_clip or has_skipped_region or has_insertion:
+                    if has_structural_variant:
                         _id = chrom
                         unmapped_read = ReadAndReference(read=read)
                         id2read[_id].append(unmapped_read)
                         unmapped_reads.append(unmapped_read)
 
-                        if len(unmapped_reads) >= 500:
+                        if len(unmapped_reads) >= max_reads:
                             break
-            if len(unmapped_reads) >= 500:
+            if len(unmapped_reads) >= max_reads:
                 break
         except ValueError:
             print(f"Region doesn't exist in BAM: {chrom}:{start}-{end}")
-            continue
-        
+            continue 
     seq_offset = 0
     for seq in reference:
         matches = id2read[seq.id]
@@ -357,6 +364,11 @@ def simulate_mapped_reads(
 def real_mapped_reads(
     bam_file: Union[Path, None] = None,
     reference_genome: Union[Path, None] = None,
+    chr_number: int = 2,
+    type_of_sv: Literal["deletion", "insertion", "skipped_region", "soft_clip"] = "insertion",
+    size_of_sv: int = 20,
+    max_reads: int = 500,
+    vcf_path: Optional[Path] = None,
 ):
     """
     Simulates reads and maps them to the reference genome.
@@ -364,7 +376,12 @@ def real_mapped_reads(
 
     mapped_reads = map_real_reads_to_reference(
         reads=load_real_reads_from_disk(bam_file),
+        vcf_path=vcf_path,
         reference=reference_genome,
+        chr_number=chr_number,
+        type_of_sv=type_of_sv,
+        size_of_sv=size_of_sv,
+        max_reads=max_reads,
     )
 
     return mapped_reads
