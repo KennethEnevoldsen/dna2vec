@@ -210,15 +210,7 @@ def post_process_results(results, mapped_reads, queries, topk):
                     best_fragment_cigar_string = generate_cigar_string(result_dict["distance_to_index"][best_fragment_distance][0][-1])
                     best_alignment_str = alignment_str
                     is_best_frag_dist_aligns_best_sw_dist = True if best_fragment_distance == best_distance else False
-                    # if not is_best_frag_dist_aligns_best_sw_dist:
-                    #     breakpoint()
-                    #     print("-"*100)
-                    #     print("Structural Integrity claims that the best alignment has lots of fragmentation, we are checking the best alignment again")
-                    #     print(sorted_alignment_integrity)
-                    #     print(sorted_best_three_distances)
-                    #     print("-"*100)
-                    #     max_idx_sorted_alignment_integrity = np.argmax(sorted_alignment_integrity)
-                    #     print(max_idx_sorted_alignment_integrity)
+
                     best_fragment_start_index = index
                     is_best_frag_start_idx_eq_read_ref_start_idx = True if best_fragment_start_index == read_reference_start else False
                     reference_interval = f"[{matching_trained_position}, {matching_trained_position + 1300}]" if matching_trained_position is not None else "No match"

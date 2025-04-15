@@ -79,7 +79,6 @@ def main(cfg: DictConfig):
                         max_reads=cfg.experiment_settings.max_reads,
                         vcf_path=f"{cfg.base_settings.data_path}/human_deletions_GS_correct.vcf",
                     )
-
                     queries = []
                     small_indices = []
                     start_indices = []

@@ -222,7 +222,7 @@ def map_real_reads_to_reference(
             if svlen > 50:
                 deletions.append((chrom, start, end))
 
-    print(f"Loaded {len(deletions)} deletions on chr2.")
+    print(f"Loaded {len(deletions)} {type_of_sv}s on chr{chr_number}.")
     
     # === Step 2: Extract reads with deletions, soft clips, or skipped regions ===
     for chrom, start, end in tqdm(deletions, desc="Processing chr19 deletions"):
