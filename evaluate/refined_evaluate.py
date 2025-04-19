@@ -5,8 +5,8 @@ from datetime import datetime
 from itertools import product
 from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
-from helpers import initialize_pinecone, align_real_reads, query_and_align, post_process_results, sv_results_refiner
-from dna2vec.simulate import real_mapped_reads #simulate_mapped_reads
+from helpers import initialize_pinecone, align_real_reads, query_and_align, post_process_results, sv_results_refiner, call_svs_using_depth_graphs
+from dna2vec.simulate import real_mapped_reads, get_reads_near_alignments
 
 # Read metadata headers for namespace alignment
 def load_meta_headers(path):
@@ -128,11 +128,24 @@ def main(cfg: DictConfig):
                     results_df.to_csv(results_df_file, index=False)
                     print(f"Results dataframe saved to {results_df_file}")
                     
-                    results_df = sv_results_refiner(results_df_file)
+                    results_df = sv_results_refiner(results_df)
                     refined_results_df_file = results_dir / f"results_refined.csv"
                     results_df.to_csv(refined_results_df_file, index=False)
                     print(f"Refined results dataframe saved to {refined_results_df_file}")
-            
+                    
+                    # get the ones with eval_results["is_read/frag_gt_index_same_as_gt_index"] == True]
+                    to_be_sv_called_reads = results_df[results_df["is_read/frag_gt_index_same_as_gt_index"] == True]
+                    
+                    # get the reads near alignments
+                    reads_near_alignments, to_be_sv_called_reads = get_reads_near_alignments(aligned_reads=to_be_sv_called_reads, bam_file=bam_file)
+                    
+                    # Perform SV calling by creating depth graphs
+                    sv_results = call_svs_using_depth_graphs(reads_near_alignments, to_be_sv_called_reads)
+                    
+                    # Save SV calling results
+                    sv_results_file = results_dir / f"sv_results.csv"
+                    sv_results.to_csv(sv_results_file, index=False)
+                    print(f"SV calling results saved to {sv_results_file}")
                     
                     if cfg.return_type == "score":
                         total_perf = np.mean(results)

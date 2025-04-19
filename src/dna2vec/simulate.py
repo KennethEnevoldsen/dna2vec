@@ -237,8 +237,9 @@ def map_real_reads_to_reference(
                         has_structural_variant = any(op == 3 and length >= size_of_sv for op, length in read.cigartuples)  # N
                     elif type_of_sv == "soft_clip":
                         has_structural_variant = any(op == 4 and length >= size_of_sv for op, length in read.cigartuples)  # S
+                    elif type_of_sv == "all":
+                        has_structural_variant = any((op == 2 or op == 1 or op == 3 or op == 4) and length >= size_of_sv for op, length in read.cigartuples)
                     
-                    # if has_deletion or has_soft_clip or has_skipped_region or has_insertion:
                     if has_structural_variant:
                         _id = chrom
                         unmapped_read = ReadAndReference(read=read)
@@ -266,6 +267,35 @@ def map_real_reads_to_reference(
             assert read.query_sequence == read.seq
         seq_offset += len(seq.seq)
     return unmapped_reads
+
+def get_reads_near_alignments(
+    aligned_reads: pd.DataFrame,
+    bam_file: Path,
+    chr_number: int = 2,
+) -> List[ReadAndReference]:
+    """
+    Get reads near alignments to call SVs
+    """
+    reads_near_alignments = {}
+    reads = load_real_reads_from_disk(bam_file)
+    # === Step 2: Extract reads with deletions, soft clips, or skipped regions ===
+    for _, aligned_read in tqdm(aligned_reads.iterrows(), desc="Finding Reads Near Alignments"):
+        start = int(aligned_read["read/frag_gt_idx"])
+        end = start + int(aligned_read["read/frag_gt_alignment_index"][0][-1][-1]) - int(aligned_read["read/frag_gt_alignment_index"][0][0][0])
+        try:
+            for read in tqdm(reads.fetch(str(chr_number), start-300, end+300), desc="Processing reads"):
+                if read.query_sequence == aligned_read["read_gt"]:
+                    continue      
+                read_near_alignment = read
+                if aligned_read["enum"] not in reads_near_alignments:
+                    reads_near_alignments[aligned_read["enum"]] = []
+                reads_near_alignments[aligned_read["enum"]].append(read_near_alignment)
+
+        except ValueError:
+            print(f"Region doesn't exist in BAM: {chr_number}:{start}-{end}")
+            continue 
+        
+    return reads_near_alignments, aligned_reads
 
 def find_reference_reads(
     indices: List[int],

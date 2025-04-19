@@ -3,16 +3,16 @@ defaults:
 
 # Base configuration variables
 base_settings:
-  chromosome: "ch19"  # Set the chromosome number here
+  chromosome: "ch2"  # Set the chromosome number here
   reference: "hs37d5"  # Set the reference genome here
   base_path: "/home/yigit/codebase/dna2vec"  # Base path for all other paths
   data_path: "/mnt/SSD2/dnarde"
 
 experiment_settings:
-  chr_number: 19  # Matches the chromosome set above
-  type_of_sv: "soft_clip" # "insertion", "deletion", "skipped_region", "soft_clip"
+  chr_number: 2  # Matches the chromosome set above
+  type_of_sv: "deletion" # "insertion", "deletion", "skipped_region", "soft_clip", "all"
   size_of_sv: 50 # Size of the structural variant
-  max_reads: 500 # Maximum number of reads to simulate
+  max_reads: 10 # Maximum number of reads to simulate
 
 # All settings below will derive from the chromosome and reference settings
 vector_db:
@@ -57,7 +57,3 @@ grid_search:
 
 configs:
   raw_fasta_files: "${base_settings.data_path}/${base_settings.chromosome}/${base_settings.reference}.fasta"
-
-hydra:
-  run:
-    dir: ./outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
