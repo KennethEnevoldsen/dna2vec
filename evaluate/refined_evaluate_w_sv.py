@@ -5,9 +5,11 @@ from datetime import datetime
 from itertools import product
 from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
-from helpers import initialize_pinecone, align_real_reads, query_and_align
+from helpers import initialize_pinecone, align_real_reads, query_and_align, post_process_results
+from dna2vec.simulate import real_mapped_reads
 from aligners.bwamem2 import bwa_mem2_align
-from dna2vec.simulate import simulate_mapped_reads
+# from sv_caller import sv_results_refiner, call_svs_using_depth_graphs
+# from sv_caller_v2 import sv_results_refiner, call_svs_using_depth_graphs_aggregated
 
 # Read metadata headers for namespace alignment
 def load_meta_headers(path):
@@ -70,16 +72,17 @@ def main(cfg: DictConfig):
                     topk = per_k * 25
                     distributed = True
                 if cfg.test_mode:
-                    mapped_reads = simulate_mapped_reads(
-                        n_reads_pr_amplicon = cfg.num_reads,
-                        read_length = read_length,
-                        insertion_rate = insertion_rate,
-                        deletion_rate = deletion_rate,
-                        sequencing_system = cfg.system,
-                        reference_genome = fasta_file_path,
-                        quality = quality,
+                    bam_file = Path(cfg.paths.bam_file)
+                    mapped_reads = real_mapped_reads(
+                        bam_file=bam_file,
+                        reference_genome=fasta_file_path,
+                        chr_number=cfg.experiment_settings.chr_number,
+                        type_of_sv=cfg.experiment_settings.type_of_sv,
+                        size_of_sv=cfg.experiment_settings.size_of_sv,
+                        max_reads=cfg.experiment_settings.max_reads,
+                        vcf_path=f"{cfg.base_settings.data_path}/human_deletions_GS_correct.vcf",
+                        bed_path=cfg.paths.bed_path,
                     )
-                    
                     queries = []
                     small_indices = []
                     start_indices = []
@@ -117,16 +120,52 @@ def main(cfg: DictConfig):
                         return_type=cfg.return_type,
                     )
                     
+                    if cfg.namespace:
+                        processed_results, results_df = post_process_results(results_list, mapped_reads, queries, topk / 25)
+                    else:
+                        processed_results, results_df = post_process_results(results_list, mapped_reads, queries, topk)
+                    
                     # Save the dataframe to CSV - using Hydra's output directory
                     results_dir = log_folder / f"results_chr{cfg.experiment_settings.chr_number}_{cfg.experiment_settings.type_of_sv}_{cfg.experiment_settings.size_of_sv}_{cfg.experiment_settings.max_reads}_{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}"
                     results_dir.mkdir(parents=True, exist_ok=True)
+                    results_df_file = results_dir / f"results_unformatted.csv"
+                    # modified_results_df_file = results_dir / f"results_unformatted_modified.csv"
+                    results_df.to_csv(results_df_file, index=False)
+                    # modified_results_df.to_csv(modified_results_df_file, index=False)
+                    print(f"Results dataframe saved to {results_df_file}")
+                    
+                    # results_df = sv_results_refiner(results_df)
+                    # modified_results_df = sv_results_refiner(modified_results_df)
+                    # refined_results_df_file = results_dir / f"results_refined.csv"
+                    # refined_modified_results_df_file = results_dir / f"results_refined_modified.csv"
+                    # results_df.to_csv(refined_results_df_file, index=False)
+                    # modified_results_df.to_csv(refined_modified_results_df_file, index=False)
+                    # print(f"Refined results dataframe saved to {refined_results_df_file}")
+                    
+                    # get the ones with eval_results["is_read/frag_gt_index_same_as_gt_index"] == True]
+                    # to_be_sv_called_reads = results_df[results_df["is_read/frag_gt_index_same_as_gt_index"] == True]
+                    
+                    # get the reads near alignments
+                    # reads_near_alignments, to_be_sv_called_reads = get_reads_near_alignments(aligned_reads=to_be_sv_called_reads, bam_file=bam_file, chr_number=cfg.experiment_settings.chr_number)
+                    
+                    # Perform SV calling by creating depth graphs
+                    # sv_results = call_svs_using_depth_graphs(reads_near_alignments, to_be_sv_called_reads, fasta_file_path, log_folder) # FIXME:FIXME
+                    # sv_results = call_svs_using_depth_graphs_aggregated(reads_near_alignments, to_be_sv_called_reads, fasta_file_path, log_folder)
+                    
+                    # Save SV calling results   
+                    # sv_results_file = results_dir / f"sv_results.csv"
+                    # sv_results.to_csv(sv_results_file, index=False)
+                    # print(f"SV calling results saved to {sv_results_file}")
                     
                     if cfg.return_type == "score":
                         total_perf = np.mean(results)
                         print(f"TOTAL PERFORMANCE: {total_perf:.4f}")
                         print(f"LOWER BOUND: {lower_bound:.4f}")
                         print(f"UPPER BOUND: {upper_bound:.4f}")
-            
+                        
+                        # Additional metrics from post-processing
+                        total_post_perf = np.mean(processed_results)
+                        print(f"POST-PROCESSING PERFORMANCE: {total_post_perf:.4f}")
                         
                         # Align reads using BWA-MEM2
                         # if not True:
@@ -163,11 +202,14 @@ def main(cfg: DictConfig):
                         
                                     
                         
-                        return results, total_perf, lower_bound, upper_bound
+                        return results, total_perf, lower_bound, upper_bound, results_df
 
                     else:
                         alignments = results
-                        return alignments
+                        # Calculate accuracy from post-processed results
+                        total_post_perf = np.mean(processed_results)
+                        print(f"POST-PROCESSING PERFORMANCE: {total_post_perf:.4f}")
+                        return alignments, results_df
                     
                 else:
                     # TODO: Add real reads reading here

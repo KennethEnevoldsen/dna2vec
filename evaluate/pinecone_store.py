@@ -14,7 +14,8 @@ from inference_models import EvalModel, Baseline, HFModel
 from typing import Optional
 import concurrent.futures
 import os
-
+# from evo2 import Evo2
+import torch
 
 class PineconeStore:
     def __init__(
@@ -27,6 +28,8 @@ class PineconeStore:
         baseline_name: Optional[str] = None,
         hf_model: bool = False,
         hf_model_name: Optional[str] = None,
+        evo2: bool = False,
+        evo2_model_name: str = "evo2_7b",
         pod_type: str = "s1.x1",
     ):
         if model_params is None and not baseline:
@@ -35,6 +38,8 @@ class PineconeStore:
             self.model = Baseline(option=baseline_name, device=device)
         elif hf_model:
             self.model = HFModel(model_params["tokenizer"], model_params["model"], model_params["pooling"], device)
+        # elif evo2 == "evo2":
+        #     self.model = Evo2(f'{evo2_model_name}_7b')
         else:
             self.model = EvalModel(
                 model_params["tokenizer"],
@@ -139,7 +144,16 @@ class PineconeStore:
                 metadatas = batch
                 texts = [text["text"] for text in batch]
                 # create embeddings
-                xc = self.model.encode(texts)
+                if self.evo2:
+                    input_ids = torch.tensor(
+                            self.model.tokenizer.tokenize(texts),
+                            dtype=torch.int,
+                        ).unsqueeze(0).to('cuda:0')
+                    layer_name = 'blocks.28.mlp.l3'
+                    _, embeddings = self.model(input_ids, return_embeddings=True, layer_names=[layer_name])
+                    xc = embeddings.detach().cpu().numpy()
+                else:
+                    xc = self.model.encode(texts)
 
                 # create records list for upsert
                 records = zip(ids, xc, metadatas)

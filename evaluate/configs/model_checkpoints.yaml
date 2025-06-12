@@ -1,4 +1,4 @@
-tokenizer: "/mnt/SSD1/yigit/dna_data/dna_tokenizer_10k.json"
+tokenizer: "/mnt/SSD7/yigit/dnarde/dna_tokenizer_10k.json"
 
 # initialized-with-one-step: "/mnt/SSD5/pholur/checkpoints/checkpoint_initalialized.pt"
 # trained-ch2-1000: "/mnt/SSD5/pholur/checkpoints/checkpoint_smooth-rock-29.pt"

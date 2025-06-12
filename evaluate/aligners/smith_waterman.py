@@ -120,14 +120,14 @@ def bwamem_align(
 
 def process_single_string(args: tuple):
     retrieved_fragment, read, train_pos, metadata = args
-    returned_object = calculate_smith_waterman_distance(retrieved_fragment, 
-                                                        read,
-                                                        match_score=2,  # Keep as specified
-                                                        mismatch_penalty=-1,  # Standard for nucleotide mismatches
-                                                        open_gap_penalty=-2.5,  # Higher penalty for reference sequence (string1)
-                                                        continue_gap_penalty=-0.02,  # Very low extension penalty for insertions
-                                                        debug=False)
-    # returned_object = calculate_smith_waterman_distance(retrieved_fragment, read)
+    # returned_object = calculate_smith_waterman_distance(retrieved_fragment, 
+    #                                                     read,
+    #                                                     match_score=2,  # Keep as specified
+    #                                                     mismatch_penalty=-1,  # Standard for nucleotide mismatches
+    #                                                     open_gap_penalty=-2.5,  # Higher penalty for reference sequence (string1)
+    #                                                     continue_gap_penalty=-0.02,  # Very low extension penalty for insertions
+    #                                                     debug=False)
+    returned_object = calculate_smith_waterman_distance(retrieved_fragment, read)
     return (
         returned_object["distance"],
         returned_object["begins"],

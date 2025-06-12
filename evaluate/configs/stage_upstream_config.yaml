@@ -1,8 +1,8 @@
-datapath: "/mnt/SSD1/yigit/dna_data/chromosome_19"
+datapath: "/mnt/SSD7/yigit/dnarde/ch2"
 mode_train: "hard_serialized"
-rawfile: "hs37d5.fasta"
-unit_length: 1300
-meta: "CH19"
-overlap: 300
-topath: "floodfill_ch19-hs37d5-1300.txt"
+rawfile: "NC_000002.fasta"
+unit_length: 1250
+meta: "CH2"
+overlap: 250
+topath: "floodfill_NC_000002.txt"
 ntrain: 3000000 # 500000

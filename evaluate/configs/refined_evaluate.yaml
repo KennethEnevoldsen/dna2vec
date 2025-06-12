@@ -4,19 +4,20 @@ defaults:
 # Base configuration variables
 base_settings:
   chromosome: "ch2"  # Set the chromosome number here
-  reference: "hs37d5"  # Set the reference genome here
-  base_path: "/home/yigit/codebase/dna2vec"  # Base path for all other paths
-  data_path: "/mnt/SSD2/dnarde"
+  reference: "NC-000002" #hs37d5 # Set the reference genome here
+  base_path: "/home/mehmet/codebase/dna2vec"  # Base path for all other paths
+  data_path: "/mnt/SSD7/yigit/dnarde"
 
 experiment_settings:
-  chr_number: 2  # Matches the chromosome set above
-  type_of_sv: "deletion" # "insertion", "deletion", "skipped_region", "soft_clip", "all"
+  chr_number: 19  # Matches the chromosome set above
+  type_of_sv: "all" # "insertion", "deletion", "skipped_region", "soft_clip", "all"
   size_of_sv: 50 # Size of the structural variant
-  max_reads: 10 # Maximum number of reads to simulate
+  max_reads: 1000000 # Maximum number of reads to simulate
 
 # All settings below will derive from the chromosome and reference settings
 vector_db:
-  - ${base_settings.chromosome}-${base_settings.reference}-1300
+  # - ${base_settings.chromosome}-${base_settings.reference}-1300
+  - ${base_settings.chromosome}-${base_settings.reference}
 
 model:
   - huggingface  # Model used to generate embeddings
@@ -45,6 +46,7 @@ paths:
   log_dir: "${base_settings.base_path}/Logs"
   meta_headers: "${base_settings.data_path}/${base_settings.chromosome}/headers_${base_settings.chromosome}"
   bam_file: "${base_settings.data_path}/rde2/HG002.${base_settings.reference}.2x250.bam"
+  bed_path: "/home/mehmet/codebase/dna2vec/HG002_SVs_Tier1_v0.6.bed"
 
 grid_search:
   read_length: [250]  # ART max read length

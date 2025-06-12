@@ -184,10 +184,12 @@ def map_real_reads_to_reference(
     reads: List[AlignedSegment],
     reference: Optional[Path] = None,
     vcf_path: Optional[Path] = None,
+    bed_path: Optional[Path] = None,
     chr_number: int = 2,
-    type_of_sv: Literal["deletion", "insertion", "skipped_region", "soft_clip"] = "insertion",
+    type_of_sv: Literal["deletion", "insertion", "skipped_region", "soft_clip", "all"] = "insertion",
     size_of_sv: int = 20,
     max_reads: int = 500,
+    sv_type_str: str = "INS",
 ) -> List[ReadAndReference]:
     """
     Map a read to a reference genome.
@@ -196,17 +198,20 @@ def map_real_reads_to_reference(
 
     id2read = defaultdict(list)
     unmapped_reads = []
-    # for read in reads.fetch("chr2",1018500,2020000):
-    #     _id = "chr2"
 
-    #     if len(unmapped_reads) > 2000:
-    #         break
-    #     unmapped_read = ReadAndReference(read=read)
-    #     id2read[_id].append(unmapped_read)
-    #     unmapped_reads.append(unmapped_read)
-
-    # === Step 1: Load chr2 deletions from VCF ===
-    deletions = []
+    # === Step 1: First load high-confidence regions from BED file ===
+    high_conf_regions = defaultdict(list)
+    if bed_path:
+        with open(bed_path, "r") as f:
+            for line in f:
+                parts = line.strip().split("\t")
+                chrom = parts[0]
+                high_conf_reg_start = int(parts[1])
+                high_conf_reg_end = int(parts[2])
+                high_conf_regions[chrom].append((high_conf_reg_start, high_conf_reg_end))
+    
+    # === Step 2: Load SVs from VCF that fall within high-confidence regions ===
+    svs = []
     with open(vcf_path, "r") as f:
         for line in f:
             if line.startswith("#"):
@@ -215,20 +220,28 @@ def map_real_reads_to_reference(
             chrom = parts[0]
             if chrom != str(chr_number) and chrom != "chr" + str(chr_number):  # Accept both notations
                 continue
+            
             start = int(parts[1])
             info = dict(x.split("=") for x in parts[7].split(";") if "=" in x)
             end = int(info["END"])
             svlen = int(info["SVLEN"])
-            if svlen > 50:
-                deletions.append((chrom, start, end))
-
-    print(f"Loaded {len(deletions)} {type_of_sv}s on chr{chr_number}.")
+            sv_type = info["SVTYPE"]
+            
+            if abs(svlen) > 50 and sv_type == sv_type_str:
+                # Check if this SV falls within any high-confidence region
+                for chrom_key in [str(chr_number), f"chr{chr_number}"]:
+                    for high_conf_reg_start, high_conf_reg_end in high_conf_regions.get(chrom_key, []):
+                        if high_conf_reg_start <= start <= high_conf_reg_end:
+                            svs.append((chrom, start, end))
+                            break
     
-    # === Step 2: Extract reads with deletions, soft clips, or skipped regions ===
-    for chrom, start, end in tqdm(deletions, desc="Processing chr19 deletions"):
+    print(f"Loaded {len(svs)} {type_of_sv}s on chr{chr_number}.")
+    
+    # === Step 3: Extract reads with deletions, soft clips, or skipped regions ===
+    for chrom, start, end in tqdm(svs, desc=f"Processing {type_of_sv}s on chr{chr_number}"):
         try:
             for read in tqdm(reads.fetch(chrom, start-300, end+300), desc="Processing reads"):
-                if read.cigartuples:
+                if True: #read.cigartuples:
                     if type_of_sv == "deletion":
                         has_structural_variant = any(op == 2 and length >= size_of_sv for op, length in read.cigartuples)  # D
                     elif type_of_sv == "insertion":
@@ -238,21 +251,22 @@ def map_real_reads_to_reference(
                     elif type_of_sv == "soft_clip":
                         has_structural_variant = any(op == 4 and length >= size_of_sv for op, length in read.cigartuples)  # S
                     elif type_of_sv == "all":
-                        has_structural_variant = any((op == 2 or op == 1 or op == 3 or op == 4) and length >= size_of_sv for op, length in read.cigartuples)
+                        has_structural_variant = True
                     
-                    if has_structural_variant:
+                    if True:# #has_structural_variant and read.cigarstring and read.is_mapped and read.mapq >= 70:
                         _id = chrom
                         unmapped_read = ReadAndReference(read=read)
                         id2read[_id].append(unmapped_read)
                         unmapped_reads.append(unmapped_read)
-
+                            
                         if len(unmapped_reads) >= max_reads:
                             break
             if len(unmapped_reads) >= max_reads:
                 break
         except ValueError:
             print(f"Region doesn't exist in BAM: {chrom}:{start}-{end}")
-            continue 
+            continue
+        
     seq_offset = 0
     for seq in reference:
         matches = id2read[seq.id]
@@ -395,16 +409,17 @@ def real_mapped_reads(
     bam_file: Union[Path, None] = None,
     reference_genome: Union[Path, None] = None,
     chr_number: int = 2,
-    type_of_sv: Literal["deletion", "insertion", "skipped_region", "soft_clip"] = "insertion",
+    type_of_sv: Literal["deletion", "insertion", "skipped_region", "soft_clip", "all"] = "insertion",
     size_of_sv: int = 20,
     max_reads: int = 500,
     vcf_path: Optional[Path] = None,
+    bed_path: Optional[Path] = None,
 ):
     """
     Simulates reads and maps them to the reference genome.
     """
 
-    mapped_reads = map_real_reads_to_reference(
+    mapped_reads = map_real_reads_to_reference( #TODO: Remove this
         reads=load_real_reads_from_disk(bam_file),
         vcf_path=vcf_path,
         reference=reference_genome,
@@ -412,6 +427,7 @@ def real_mapped_reads(
         type_of_sv=type_of_sv,
         size_of_sv=size_of_sv,
         max_reads=max_reads,
+        bed_path=bed_path,
     )
-
+    
     return mapped_reads

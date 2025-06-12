@@ -1,3 +1,4 @@
+# Add directories or file patterns to ignore during indexing (e.g. foo/ or *.csv)
 # vs code
 .vscode
 
@@ -46,9 +47,3 @@ simulated_reads/
 # Data path that we dont want to push to git
 evaluate/data
 outputs/
-*.vcf
-*.bed
-evaluate/aligners/bwa-mem2-2.2.1_x64-linux/
-evaluate/playground/*.html
-evaluate/playground/*.pth
-evaluate/playground/manta
