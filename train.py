@@ -27,7 +27,7 @@ CONFIG = ConfigSchema(
     ),
     dataset_config=DatasetConfigSchemaUniformSampling(
         fasta_file=[
-            Path("/mnt/SSD1/shreyas/dna2vec/data/chromosome_2/NC_000002.fasta")
+            Path("/mnt/SSD7/yigit/dnarde/ch2/NC-000002.fasta")
         ],
         range_min=800,
         range_max=2000,

@@ -380,9 +380,116 @@ def collate_fn_sft(
             read=(read_1_tokenized),
             read_regularization=False,
         )
+        
+def collate_fn_sft_triplet(
+    batch, tokenizer
+) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
+    """
+    collate to max batch size and output a dictionary with two elements
+    ids = matrix of shape (batch_size, max_sequence_length)
+    attention_mask = matrix of shape (batch_size, max_sequence_length)
+    """
+
+    subsequence_batch = batch
+
+    fragment = [subsequence_ex.fragment for subsequence_ex in subsequence_batch]
+
+    reads = [subsequence_ex.read for subsequence_ex in subsequence_batch]
+
+    art_reads = add_noise_triplet(reads)
+
+    # Check if the regularizer is enabled across the entire batch
+    read_regularization = all(
+        [subsequence_ex.read_regularization for subsequence_ex in subsequence_batch]
+    )
+
+    fragment_tokenized = tokenizer(fragment, return_tensors="pt", padding=True)
+
+    if read_regularization: #TODO: comment this out
+        read_1, read_2, read_3 = list(zip(*art_reads))
+        read_1_tokenized = tokenizer(read_1, return_tensors="pt", padding=True)
+        read_2_tokenized = tokenizer(read_2, return_tensors="pt", padding=True)
+        read_3_tokenized = tokenizer(read_3, return_tensors="pt", padding=True)
+
+        return SubsequenceExample(
+            fragment=fragment_tokenized,
+            read=(read_1_tokenized, read_2_tokenized, read_3_tokenized),
+            read_regularization=True,
+        )
+
+    else:
+        read_1 = reads
+        read_1_tokenized = tokenizer(read_1, return_tensors="pt", padding=True)
+
+        return SubsequenceExample(
+            fragment=fragment_tokenized,
+            read=(read_1_tokenized),
+            read_regularization=False,
+        )
 
 
 def add_noise(
+    batch: List[str],
+    frac_of_edits: float = 0.4,
+    edit_range: List[int] = [1, 5],
+    distribution_mode: str = "uniform",
+) -> List[str]:
+    """
+    Adds noise to a batch of DNA reads by editing a fraction of them. Each edit consists of
+    flipping base pairs at random positions.
+
+
+    :param batch: List of DNA reads represented as strings.
+    :param frac_of_edits: Fraction of reads that will be edited.
+    :param edit_range: Range (percentage) of bases in each read to be edited.
+    :param distribution_mode: Determines how the number of edits is distributed across the reads.
+    :return: The batch with noise added to some reads.
+    """
+
+    edited_batch = []
+    for read1, read2 in batch:
+
+        if random.random() < frac_of_edits:  # Decide if the read is to be edited
+            
+            num_bases = min(len(read1), len(read2)) # total bases
+
+            if distribution_mode == "uniform":
+                percent_edit = random.sample(range(edit_range[0], edit_range[1]), 1)[0]
+
+            percent_edit = min(
+                max(percent_edit, edit_range[0]), edit_range[1]
+            )  # Clamp within edit range
+            num_edits = int(
+                percent_edit * 0.01 * num_bases
+            )  # Convert percentage to actual number of edits
+
+            edit_indices = random.sample(
+                range(num_bases), num_edits
+            )  # Get random indices for edits
+            new_read_1 = list(read1)  # Convert string to list for editing
+            new_read_2 = list(read2)
+            for idx in edit_indices:
+                current_base_1 = read1[idx]
+                current_base_2 = read2[idx]
+                # current_base_3 = read3[idx] #TODO: comment this out
+                new_base_1 = random.choice(
+                    list({"A", "T", "G", "C"} - {current_base_1})
+                )  # Pick a different base
+                new_base_2 = random.choice(
+                    list({"A", "T", "G", "C"} - {current_base_2})
+                )
+                new_read_1[idx] = new_base_1
+                new_read_2[idx] = new_base_2
+            edited_batch.append(
+                ("".join(new_read_1), "".join(new_read_2))
+            )  # Convert back to string and add to batch
+        else:
+            edited_batch.append((read1, read2))
+
+    return edited_batch
+
+
+def add_noise_triplet(
     batch: List[str],
     frac_of_edits: float = 0.4,
     edit_range: List[int] = [1, 5],
@@ -406,9 +513,7 @@ def add_noise(
 
         if random.random() < frac_of_edits:  # Decide if the read is to be edited
             
-            num_bases = min(len(read1), len(read2)) # total bases
-            # num_bases = min(len(read1), len(read2), len(read3))  # total bases #TODO: comment this out
-            num_bases = min(len(read1), len(read2))
+            num_bases = min(len(read1), len(read2), len(read3))  # total bases #TODO: comment this out
 
             if distribution_mode == "uniform":
                 percent_edit = random.sample(range(edit_range[0], edit_range[1]), 1)[0]
@@ -425,31 +530,27 @@ def add_noise(
             )  # Get random indices for edits
             new_read_1 = list(read1)  # Convert string to list for editing
             new_read_2 = list(read2)
-            # new_read_3 = list(read3) #TODO: comment this out
+            new_read_3 = list(read3) #TODO: comment this out
             for idx in edit_indices:
                 current_base_1 = read1[idx]
                 current_base_2 = read2[idx]
-                # current_base_3 = read3[idx] #TODO: comment this out
+                current_base_3 = read3[idx] #TODO: comment this out
                 new_base_1 = random.choice(
                     list({"A", "T", "G", "C"} - {current_base_1})
                 )  # Pick a different base
                 new_base_2 = random.choice(
                     list({"A", "T", "G", "C"} - {current_base_2})
                 )
-                # new_base_3 = random.choice(
-                #     list({"A", "T", "G", "C"} - {current_base_3})  #TODO: comment this out
-                # )
+                new_base_3 = random.choice(
+                    list({"A", "T", "G", "C"} - {current_base_3})  #TODO: comment this out
+                )
                 new_read_1[idx] = new_base_1
                 new_read_2[idx] = new_base_2
-                # new_read_3[idx] = new_base_3 #TODO: comment this out
-            # edited_batch.append(
-            #     ("".join(new_read_1), "".join(new_read_2), "".join(new_read_3)) #TODO: comment this out
-            # )  # Convert back to string and add to batch
+                new_read_3[idx] = new_base_3 #TODO: comment this out
             edited_batch.append(
-                ("".join(new_read_1), "".join(new_read_2))
+                ("".join(new_read_1), "".join(new_read_2), "".join(new_read_3)) #TODO: comment this out
             )  # Convert back to string and add to batch
         else:
-            # edited_batch.append((read1, read2, read3))  # No edits, add original read to batch
-            edited_batch.append((read1, read2))
+            edited_batch.append((read1, read2, read3))  # No edits, add original read to batch
 
     return edited_batch

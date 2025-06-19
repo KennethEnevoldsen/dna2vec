@@ -1,0 +1,20 @@
+# @package val_dataset_config
+_target_: dna2vec.config_schema.DatasetConfigSchemaUniformSampling
+
+# FASTA files for validation (can be same as training or different)
+fasta_file: "/mnt/SSD7/yigit/dnarde/ch2/NC-000002.fasta"
+
+# Fragment sampling parameters (same as training)
+range_min: 1500
+range_max: 2000
+
+# Read sampling parameters (same as training)
+subsequence_range_min: 150
+subsequence_range_max: 500
+
+# Dataset class and sampling strategy (same as training)
+dataset: dna2vec_sft.dataset.FastaUniformSampler
+sampling_strategy: "three_nonoverlapping_subsequence_uppercase"
+
+# Enable read regularizer (same as training)
+read_regularizer: true 

@@ -1,0 +1,31 @@
+# @package _global_
+
+# Quick test configuration for rapid prototyping
+defaults:
+  - /model: sft_model
+  - /training: sft_training_fast
+  - /dataset: train_dataset
+  - /dataset@val_dataset_config: val_dataset
+  - _self_
+
+experiment_name: "quick_tests"
+run_name: "test_${now:%H%M%S}"
+
+# Quick test overrides
+training_config:
+  max_steps: 500      # Very short training
+  batch_size: 8       # Small batch size
+  log_interval: 10    # Frequent logging
+  accumulation_steps: 2
+  
+  # Skip validation for speed
+  patience: 999       # Effectively disable early stopping
+
+model_config:
+  mlp_config:
+    hidden_dim: 256   # Smaller model
+    num_layers: 1     # Single layer
+
+# Disable WandB for quick tests
+wandb:
+  mode: "disabled" 

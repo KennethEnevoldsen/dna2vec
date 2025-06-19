@@ -1,0 +1,54 @@
+# @package training_config
+# The _target_ is not needed here anymore as we construct the pydantic model manually
+
+# Training steps and batching
+max_steps: 50000
+batch_size: 16
+accumulation_steps: 8
+device: "cuda:2"  # This will be converted to a torch.device object
+collate_fn: "sft_triplet"
+
+# Logging and checkpointing
+log_interval: 100
+save_path: "./checkpoints"
+
+# Optimizer configuration
+optimizer: torch.optim.AdamW
+optimizer_config:
+  # This section is now used by Pydantic's OptimizerConfigSchema
+  lr: 1.0e-5
+  weight_decay: 0.01
+  betas: [0.9, 0.999]
+
+# Scheduler configuration  
+scheduler: torch.optim.lr_scheduler.OneCycleLR
+scheduler_config:
+  # This section is now used by Pydantic's SchedulerConfigSchema
+  max_lr: 1.0e-5
+  total_steps: null  # Will be calculated automatically
+  pct_start: 0.1
+  anneal_strategy: "cos"
+
+# Loss and similarity functions
+loss: torch.nn.CrossEntropyLoss
+similarity: dna2vec.similarity.SimilarityWithTemperature  
+temperature: 0.07
+
+# Training parameters
+regularizer: 0.0
+pool_type: "mean"
+max_grad_norm: 1.0
+
+# SFT specific parameters
+warmup_steps: 1000
+gradient_checkpointing: false
+contrastive_loss_weight: 1.0
+
+# Early stopping
+patience: 5
+min_delta: 1.0e-4
+
+# Loss weights for multi-objective training
+alpha: 0.25  # Fragment losses weight
+beta: 0.75   # Triplet loss weight  
+gamma: 0.0   # Directional loss weight 

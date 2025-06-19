@@ -1,0 +1,28 @@
+# Main configuration file for DNA2Vec SFT training
+# @package _global_
+
+defaults:
+  - model: sft_model
+  - training: sft_training  
+  - dataset: train_dataset
+  - dataset@val_dataset_config: val_dataset
+  - _self_
+
+# Experiment tracking
+experiment_name: "dna2vec_sft_experiment_triplet_loss_margin_0.5"
+run_name: "${model.mlp_config.output_dim}_${training.pool_type}_triplet_${now:%Y-%m-%d_%H-%M-%S}"
+
+# Hydra configuration
+hydra:
+  run:
+    dir: outputs/${experiment_name}/${run_name}
+  sweep:
+    dir: multirun/${experiment_name}
+    subdir: ${hydra.job.num}
+
+# WandB configuration  
+wandb:
+  mode: "online"  # online, offline, disabled
+  watch: true
+  project: "dna2vec-sft"
+  name: "${run_name}" 

@@ -1,0 +1,53 @@
+# @package training_config  
+_target_: dna2vec_sft.sft_config_schema.SFTTrainingConfigSchema
+
+# Training steps and batching - FAST variant
+max_steps: 10000       # Fewer steps for quick experiments
+batch_size: 32         # Larger batch size
+accumulation_steps: 4  # Fewer accumulation steps
+device: "cuda:2"
+
+# Logging and checkpointing
+log_interval: 50       # More frequent logging
+save_path: "./checkpoints"
+
+# Optimizer configuration - faster learning
+optimizer: torch.optim.AdamW
+optimizer_config:
+  _target_: dna2vec.config_schema.OptimizerConfigSchema
+  lr: 2.0e-5           # Higher learning rate
+  weight_decay: 0.01
+  betas: [0.9, 0.999]
+
+# Scheduler configuration
+scheduler: torch.optim.lr_scheduler.OneCycleLR
+scheduler_config:
+  _target_: dna2vec.config_schema.SchedulerConfigSchema
+  max_lr: 2.0e-5       # Higher max learning rate
+  total_steps: null
+  pct_start: 0.1
+  anneal_strategy: "cos"
+
+# Loss and similarity functions
+loss: torch.nn.CrossEntropyLoss
+similarity: dna2vec.model.CosineSimilarity
+temperature: 0.07
+
+# Training parameters
+regularizer: 0.0
+pool_type: "mean"
+max_grad_norm: 1.0
+
+# SFT specific parameters
+warmup_steps: 500      # Fewer warmup steps
+gradient_checkpointing: false
+contrastive_loss_weight: 1.0
+
+# Early stopping - more aggressive
+patience: 3            # Less patience
+min_delta: 1.0e-4
+
+# Loss weights
+alpha: 0.25
+beta: 0.75  
+gamma: 0.0 

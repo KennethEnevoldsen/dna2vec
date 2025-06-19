@@ -1,0 +1,31 @@
+# @package _global_
+
+# Override the defaults for triplet loss experiment
+defaults:
+  - /model: sft_model
+  - /training: sft_training
+  - /dataset: train_dataset  
+  - /dataset@val_dataset_config: val_dataset
+  - _self_
+
+experiment_name: "read_read_loss_experiment_contrastive_loss_06_read_read_loss_04"
+run_name: "read_read_loss_experiment_contrastive_loss_06_read_read_loss_04"
+
+dataset_config:
+  sampling_strategy: "random_subsequence_uppercase"
+
+# adjust val dataset to be the same as train dataset
+val_dataset_config:
+  sampling_strategy: "random_subsequence_uppercase"
+
+# Specific overrides for triplet loss training
+training_config:
+  collate_fn: "sft_normal"
+  device: "cuda:1"
+
+# WandB config
+wandb:
+  name: "${run_name}"
+  project: "dna2vec-triplet-experiments" 
+  mode: "online"
+  watch: true

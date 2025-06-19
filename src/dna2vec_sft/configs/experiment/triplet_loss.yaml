@@ -1,0 +1,47 @@
+# @package _global_
+
+# Override the defaults for triplet loss experiment
+defaults:
+  - /model: sft_model
+  - /training: sft_training
+  - /dataset: train_dataset  
+  - /dataset@val_dataset_config: val_dataset
+  - _self_
+
+experiment_name: "triplet_loss_experiment_margin_0.25"
+run_name: "triplet_loss_experiment_margin_0.25"
+
+dataset_config:
+  sampling_strategy: "three_nonoverlapping_subsequence_uppercase"
+
+# adjust val dataset to be the same as train dataset
+val_dataset_config:
+  sampling_strategy: "three_nonoverlapping_subsequence_uppercase"
+
+# Specific overrides for triplet loss training
+training_config:
+  # Focus on triplet loss
+  alpha: 0.0   # No fragment losses
+  beta: 1.0    # Full triplet loss
+  gamma: 0.0   # No directional loss
+  
+  # Adjusted training parameters for triplet loss
+  max_steps: 50000
+  batch_size: 24  # Slightly larger batch for triplet stability
+  warmup_steps: 2000
+  
+  # Lower learning rate for stability
+  optimizer_config:
+    lr: 5.0e-6
+  scheduler_config:
+    max_lr: 5.0e-6
+
+  collate_fn: "sft_triplet"
+  device: "cuda:1"
+
+# WandB config
+wandb:
+  name: "${run_name}"
+  project: "dna2vec-triplet-experiments" 
+  mode: "online"
+  watch: true

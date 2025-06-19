@@ -1,0 +1,27 @@
+# @package model_config
+_target_: dna2vec_sft.sft_config_schema.SFTModelConfigSchema
+
+# Pre-trained encoder path (optional)
+pretrained_encoder_path: "/mnt/SSD7/yigit/dnarde/regularization_0.0_pool_1020mean_checkpoint.pt"
+
+# Model architecture parameters
+embedding_dim: 1020
+dim_feedforward: 1536
+num_heads: 12
+num_layers: 6
+dropout: 0.1
+activation: "gelu"
+max_position_embeddings: 1024
+
+# MLP head configuration
+mlp_config:
+  _target_: dna2vec_sft.sft_config_schema.MLPConfigSchema
+  input_dim: 1020  # Should match embedding_dim
+  hidden_dim: 512
+  output_dim: 1020  # Final projection dimension
+  dropout: 0.1
+  activation: "relu"
+  num_layers: 2
+
+# Training options
+freeze_encoder: false  # Set to true to freeze encoder weights during training 
