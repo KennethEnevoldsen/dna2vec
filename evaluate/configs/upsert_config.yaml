@@ -6,7 +6,7 @@ defaults:
 # vector_db: ["ch2-hs37d5-1300"]
 # vector_db: ["ch19-hs37d5-1300"]
 vector_db: ["ch2-NC-000002"]
-model: ["evo2"]
+model: ["huggingface"]
 device: "cuda:0"
 add_namespace: true
 no_namespace: false
@@ -14,7 +14,7 @@ no_namespace: false
 # recipes: ["ch19-hs37d5-1300"]
 recipes: ["ch2-NC-000002"]
 pod_type: "s1.x4"
-checkpoints : ["evo2"]
+checkpoints : ["huggingface"]
 data_recipes:
   ch2-hs37d5-1300:
     # - /mnt/SSD1/yigit/dna_data/chromosome_2/floodfill_ch2-hs37d5.txt
@@ -24,4 +24,4 @@ data_recipes:
     - /mnt/SSD1/yigit/dna_data/chromosome_19/floodfill_ch19-hs37d5-1300.txt
 
   ch2-NC-000002:
-    - /mnt/SSD7/yigit/dnarde/ch2/floodfill_NC-000002.txt
+    - /mnt/SSD1/yigit/chromosome_2/floodfill_NC_000002.txt

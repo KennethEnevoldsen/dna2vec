@@ -38,8 +38,6 @@ class PineconeStore:
             self.model = Baseline(option=baseline_name, device=device)
         elif hf_model:
             self.model = HFModel(model_params["tokenizer"], model_params["model"], model_params["pooling"], device)
-        # elif evo2 == "evo2":
-        #     self.model = Evo2(f'{evo2_model_name}_7b')
         else:
             self.model = EvalModel(
                 model_params["tokenizer"],

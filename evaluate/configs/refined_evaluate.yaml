@@ -9,7 +9,7 @@ base_settings:
   data_path: "/mnt/SSD7/yigit/dnarde"
 
 experiment_settings:
-  chr_number: 19  # Matches the chromosome set above
+  chr_number: 2  # Matches the chromosome set above
   type_of_sv: "all" # "insertion", "deletion", "skipped_region", "soft_clip", "all"
   size_of_sv: 50 # Size of the structural variant
   max_reads: 1000000 # Maximum number of reads to simulate
@@ -32,8 +32,8 @@ no_namespace: false
 reads:
   - ${base_settings.chromosome}-${base_settings.reference}  # Derived from chromosome setting
 
-compare_type: score  # Type of comparison [location, score, both]
-pod_type: s1.x1  # Pod type for testing (if creating a new index)
+compare_type: both  # Type of comparison [location, score, both]
+pod_type: s1.x4  # Pod type for testing (if creating a new index)
 test_mode: true
 return_type: score  # Return type [best_alignment, all_alignments, score]
 
